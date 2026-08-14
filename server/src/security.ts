@@ -14,7 +14,7 @@ export function initSecuritySchema(): void {
     CREATE TABLE IF NOT EXISTS role_permissions (role_id TEXT NOT NULL, permission_id TEXT NOT NULL, PRIMARY KEY(role_id, permission_id));
     CREATE TABLE IF NOT EXISTS security_projects (id TEXT PRIMARY KEY, name TEXT NOT NULL, description TEXT NOT NULL DEFAULT '', created_at TEXT NOT NULL);
     CREATE TABLE IF NOT EXISTS security_scopes (id TEXT PRIMARY KEY, project_id TEXT NOT NULL, kind TEXT NOT NULL, value TEXT NOT NULL, excluded INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL);
-    CREATE TABLE IF NOT EXISTS security_policies (id TEXT PRIMARY KEY, name TEXT UNIQUE NOT NULL, enabled INTEGER NOT NULL DEFAULT 1, max_risk TEXT NOT NULL DEFAULT 'medium', require_approval_above TEXT NOT NULL DEFAULT 'medium', created_at TEXT NOT NULL, updated_at TEXT NOT NULL);
+    CREATE TABLE IF NOT EXISTS security_policies (id TEXT PRIMARY KEY, name TEXT UNIQUE NOT NULL, enabled INTEGER NOT NULL DEFAULT 1, max_risk TEXT NOT NULL DEFAULT 'critical', require_approval_above TEXT NOT NULL DEFAULT 'medium', created_at TEXT NOT NULL, updated_at TEXT NOT NULL);
     CREATE TABLE IF NOT EXISTS security_approvals (id TEXT PRIMARY KEY, project_id TEXT, actor TEXT NOT NULL, tool TEXT NOT NULL, target TEXT, risk TEXT NOT NULL, request TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'pending', decided_by TEXT, decision_reason TEXT, expires_at TEXT, created_at TEXT NOT NULL, decided_at TEXT);
     CREATE TABLE IF NOT EXISTS security_audit (id TEXT PRIMARY KEY, ts TEXT NOT NULL, actor TEXT NOT NULL, action TEXT NOT NULL, resource TEXT, decision TEXT, detail TEXT, previous_hash TEXT, event_hash TEXT NOT NULL);
     CREATE INDEX IF NOT EXISTS idx_security_audit_ts ON security_audit(ts DESC);
@@ -36,7 +36,7 @@ export function initSecuritySchema(): void {
   for (const p of all) rp.run(admin.id, p.id);
   for (const n of ['security.read','missions.create','missions.execute','tools.read','tools.execute.low','tools.execute.medium','approvals.review']) { const p = all.find(x => x.name === n); if (p) rp.run(pentester.id, p.id); }
   for (const n of ['security.read','tools.read','audit.read']) { const p = all.find(x => x.name === n); if (p) rp.run(analyst.id, p.id); }
-  db.prepare(`INSERT OR IGNORE INTO security_policies (id,name,enabled,max_risk,require_approval_above,created_at,updated_at) VALUES (?, ?, 1, 'medium', 'medium', ?, ?)`).run('default','default',nowIso(),nowIso());
+  db.prepare(`INSERT OR IGNORE INTO security_policies (id,name,enabled,max_risk,require_approval_above,created_at,updated_at) VALUES (?, ?, 1, 'critical', 'medium', ?, ?)`).run('default','default',nowIso(),nowIso());
 }
 
 export function hasPermission(role: string, permission: string): boolean {
