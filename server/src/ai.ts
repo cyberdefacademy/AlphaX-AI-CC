@@ -1,0 +1,9 @@
+import { getDb, nowIso, randomId } from './db';
+import { audit } from './security';
+export type Provider='ollama'|'lmstudio'|'generic';
+export interface ModelEndpoint{id:string;name:string;provider:Provider;baseUrl:string;model:string;enabled:boolean;createdAt:string;}
+export function initAiSchema():void{getDb().exec(`CREATE TABLE IF NOT EXISTS ai_models(id TEXT PRIMARY KEY,name TEXT UNIQUE NOT NULL,provider TEXT NOT NULL,base_url TEXT NOT NULL,model TEXT NOT NULL,enabled INTEGER NOT NULL DEFAULT 1,created_at TEXT NOT NULL);CREATE TABLE IF NOT EXISTS ai_runs(id TEXT PRIMARY KEY,model_id TEXT NOT NULL,purpose TEXT NOT NULL,input_hash TEXT NOT NULL,created_at TEXT NOT NULL);`);}
+export function registerModel(actor:string,input:{name:string;provider:Provider;baseUrl:string;model:string}):string{const id=randomId();getDb().prepare('INSERT INTO ai_models(id,name,provider,base_url,model,created_at) VALUES (?,?,?,?,?,?)').run(id,input.name,input.provider,input.baseUrl,input.model,nowIso());audit(actor,'ai.model.registered',id,'allow',{provider:input.provider,model:input.model});return id;}
+export function listModels():unknown[]{return getDb().prepare('SELECT id,name,provider,base_url as baseUrl,model,enabled,created_at as createdAt FROM ai_models ORDER BY name').all();}
+export function selectModel(purpose:string):ModelEndpoint|undefined{const row=getDb().prepare('SELECT id,name,provider,base_url as baseUrl,model,enabled,created_at as createdAt FROM ai_models WHERE enabled=1 ORDER BY CASE WHEN provider=\'ollama\' THEN 0 WHEN provider=\'lmstudio\' THEN 1 ELSE 2 END,name LIMIT 1').get() as ModelEndpoint|undefined;return row;}
+export function plannerContract():string{return 'Return a JSON task plan only. Each task must include name, objective, required_tool, target, risk, dependencies, and rationale. Never invent authorization, scope, credentials, or evidence. High-risk actions must remain pending human approval.';}
