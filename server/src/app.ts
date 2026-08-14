@@ -8,6 +8,7 @@ import { router as agentsRouter } from './routes/agents';
 import { router as activityRouter } from './routes/activity';
 import { router as tasksRouter } from './routes/tasks';
 import { router as securityRouter } from './routes/security';
+import { router as missionsRouter } from './routes/missions';
 import { requireApprovedApproval, audit, type SecurityContext } from './security';
 import { prometheusHandler, observeHttp } from './metricsProm';
 import { error as logError } from './logger';
@@ -33,11 +34,9 @@ export function createApp(): Express {
   });
 
   app.get('/api/health', (_req, res) => {
-    res.json({ ok: true, name: 'alphax-agents-os', securityControlPlane: 'enabled', time: new Date().toISOString() });
+    res.json({ ok: true, name: 'alphax-agents-os', securityControlPlane: 'enabled', orchestration: 'enabled', time: new Date().toISOString() });
   });
 
-  // High-impact direct agent command execution is now behind an explicit approval.
-  // The approval is bound to the authenticated local operator and this exact agent command capability.
   app.use('/api/agents', (req: Request, res: Response, next: NextFunction) => {
     if (req.method !== 'POST' || !/^\/[^/]+\/command\/?$/.test(req.path)) {
       next();
@@ -68,6 +67,7 @@ export function createApp(): Express {
   app.use('/api/auth', authRouter);
   app.use('/api/system', systemRouter);
   app.use('/api/security', securityRouter);
+  app.use('/api/missions', missionsRouter);
   app.use('/api/agents', agentsRouter);
   app.use('/api/activity', activityRouter);
   app.use('/api/tasks', tasksRouter);
