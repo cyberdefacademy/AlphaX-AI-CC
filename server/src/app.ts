@@ -8,6 +8,7 @@ import { router as agentsRouter } from './routes/agents';
 import { router as activityRouter } from './routes/activity';
 import { router as tasksRouter } from './routes/tasks';
 import { router as securityRouter } from './routes/security';
+import { requireApprovedApproval, audit, type SecurityContext } from './security';
 import { prometheusHandler, observeHttp } from './metricsProm';
 import { error as logError } from './logger';
 
@@ -33,6 +34,30 @@ export function createApp(): Express {
 
   app.get('/api/health', (_req, res) => {
     res.json({ ok: true, name: 'alphax-agents-os', securityControlPlane: 'enabled', time: new Date().toISOString() });
+  });
+
+  // High-impact direct agent command execution is now behind an explicit approval.
+  // The approval is bound to the authenticated local operator and this exact agent command capability.
+  app.use('/api/agents', (req: Request, res: Response, next: NextFunction) => {
+    if (req.method !== 'POST' || !/^\/[^/]+\/command\/?$/.test(req.path)) {
+      next();
+      return;
+    }
+    const approvalId = req.header('x-alphax-approval-id');
+    const agentId = req.path.split('/')[1];
+    const ctx: SecurityContext = { actor: 'local-admin', role: 'admin', tool: 'agent.command', target: agentId, risk: 'high' };
+    if (!approvalId) {
+      audit(ctx.actor, 'agent.command.blocked', agentId, 'approval_required', { tool: ctx.tool });
+      res.status(428).json({ error: 'explicit approval required', approvalEndpoint: '/api/security/evaluate', tool: ctx.tool, risk: ctx.risk });
+      return;
+    }
+    try {
+      requireApprovedApproval(approvalId, ctx);
+      next();
+    } catch (e) {
+      audit(ctx.actor, 'agent.command.blocked', agentId, 'deny', { error: String((e as Error).message) });
+      res.status(403).json({ error: String((e as Error).message) });
+    }
   });
 
   app.use((req: Request, res: Response, next: NextFunction) => {
