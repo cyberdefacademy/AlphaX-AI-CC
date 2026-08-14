@@ -1,12 +1,15 @@
-import { Router } from 'express';
+import { Router, Request } from 'express';
 import { audit, createApproval, listApprovals, listAudit, resolveApproval, requirePermission, riskDecision, type RiskLevel, type SecurityContext } from '../security';
 
 export const router = Router();
 
-function context(req: any): SecurityContext {
+// Identity is intentionally server-derived for now. Never trust a role/actor supplied by a client.
+// The existing application is single-user/local-first; session-backed identities will replace this
+// fixed local administrator context when multi-user RBAC is introduced.
+function context(req: Request): SecurityContext {
   return {
-    actor: String(req.headers['x-alphax-actor'] || 'local-admin'),
-    role: String(req.headers['x-alphax-role'] || 'admin'),
+    actor: 'local-admin',
+    role: 'admin',
     projectId: typeof req.body?.projectId === 'string' ? req.body.projectId : undefined,
     target: typeof req.body?.target === 'string' ? req.body.target : undefined,
     tool: typeof req.body?.tool === 'string' ? req.body.tool : undefined,
