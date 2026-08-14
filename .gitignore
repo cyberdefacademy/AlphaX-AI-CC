@@ -11,3 +11,4 @@ data/
 # observability stack local state
 observability/.env
 observability/prometheus/rules/prometheus.yml.swp
+.git-autosync.py
