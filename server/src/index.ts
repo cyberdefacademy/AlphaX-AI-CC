@@ -2,14 +2,14 @@ import http from 'http';
 import { createApp } from './app';
 import { hub } from './ws';
 import { defaultConfig, APP_NAME } from './config';
-import { getDb } from './db';
+import { getDb, addActivity } from './db';
 import { generateToken, tokenConfigured } from './auth';
 import { detectAll } from './detector';
 import { syncDetected } from './system';
-import { addActivity } from './db';
 import { interruptStale } from './tasks';
 import { sampleAndRecord } from './metrics';
-import { enableFileLogging, info } from './logger';
+import { enableFileLogging } from './logger';
+import { initSecuritySchema, audit } from './security';
 
 const BANNER = `
   █████╗ ██╗     ██████╗ ██╗  ██╗ █████╗ ██╗  ██╗
@@ -23,6 +23,7 @@ const BANNER = `
 async function main() {
   const cfg = defaultConfig();
   getDb();
+  initSecuritySchema();
   enableFileLogging();
   const interrupted = interruptStale();
 
@@ -34,7 +35,6 @@ async function main() {
     console.log('  Usage:');
     console.log('    npm start                         run the dashboard');
     console.log('    npm start -- --rotate-token       rotate the access token and print the new one');
-    console.log('                                      (keeps sessions, agents, activity)');
     console.log('');
     process.exit(0);
   }
@@ -52,9 +52,7 @@ async function main() {
   }
 
   let token: string | null = null;
-  if (!tokenConfigured()) {
-    token = generateToken();
-  }
+  if (!tokenConfigured()) token = generateToken();
 
   const app = createApp();
   const server = http.createServer(app);
@@ -70,11 +68,13 @@ async function main() {
     } else {
       console.log('  Access token : already configured (login with your token)');
     }
-    console.log(`  Auth        : session cookies, local-only bind`);
+    console.log('  Auth        : session cookies, local-only bind');
+    console.log('  Security    : policy + approvals + audit ledger enabled');
     if (interrupted) console.log(`  Tasks      : ${interrupted} left in a stale state marked interrupted`);
     console.log('');
 
     addActivity('system', 'Dashboard started' + (interrupted ? ` (${interrupted} stale tasks interrupted)` : ''));
+    audit('system', 'security.control-plane.started', 'security', 'allow');
 
     sampleAndRecord();
     setInterval(sampleAndRecord, 15000).unref();
@@ -87,10 +87,7 @@ async function main() {
           addActivity('system', `Auto-discovered: ${added.map((a) => a.name).join(', ')}`);
           console.log(`  [detect] new: ${added.map((a) => a.name).join(', ')}`);
         }
-        hub.broadcast('detect:done', {
-          count: candidates.length,
-          names: candidates.map((c) => c.name),
-        });
+        hub.broadcast('detect:done', { count: candidates.length, names: candidates.map((c) => c.name) });
       } catch (e) {
         console.error('[detect] error:', (e as Error).message);
       }
@@ -101,6 +98,7 @@ async function main() {
   });
 
   const shutdown = () => {
+    audit('system', 'security.control-plane.shutdown', 'security', 'allow');
     console.log('\n  Shutting down…');
     server.close(() => process.exit(0));
     setTimeout(() => process.exit(0), 1500).unref();
