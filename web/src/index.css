@@ -1,0 +1,65 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: dark;
+}
+
+body {
+  @apply bg-ink-950 text-slate-200 antialiased;
+  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: theme('colors.ink.600');
+  border-radius: 8px;
+  border: 2px solid theme('colors.ink.950');
+}
+::-webkit-scrollbar-thumb:hover {
+  background: theme('colors.ink.500');
+}
+::selection {
+  background: rgba(109, 94, 246, 0.35);
+}
+
+.card {
+  @apply rounded-xl border border-ink-700/60 bg-ink-900 p-5;
+}
+.card-hover {
+  @apply transition-colors hover:border-accent/40;
+}
+.btn {
+  @apply inline-flex items-center gap-2 rounded-lg px-3 py-1.5 text-sm font-medium transition-all disabled:cursor-not-allowed disabled:opacity-40;
+}
+.btn-primary {
+  @apply bg-accent text-white hover:bg-accent-soft;
+}
+.btn-ghost {
+  @apply border border-ink-600 bg-ink-800/60 text-slate-300 hover:border-accent/50 hover:text-white;
+}
+.btn-danger {
+  @apply border border-rose-500/40 bg-rose-500/10 text-rose-300 hover:bg-rose-500/20;
+}
+.input {
+  @apply w-full rounded-lg border border-ink-600 bg-ink-850 px-3 py-2 text-sm text-slate-200 placeholder:text-slate-500 focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent/40;
+}
+.tbl th {
+  @apply border-b border-ink-700 px-3 py-2 text-left text-xs font-semibold uppercase tracking-wider text-slate-500;
+}
+.tbl td {
+  @apply border-b border-ink-800/60 px-3 py-2 text-sm text-slate-300;
+}
+.log-box {
+  font-family: theme('fontFamily.mono');
+  @apply h-full w-full bg-black/40 p-3 text-[12px] leading-relaxed text-emerald-200/90;
+  white-space: pre-wrap;
+  word-break: break-word;
+}

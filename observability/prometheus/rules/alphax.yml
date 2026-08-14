@@ -1,0 +1,145 @@
+# AlphaX Agents OS alert rules
+# Thresholds tuned for single-host, 100s of agents.
+# Override retention/backlog window via overrides if your fleet differs.
+
+groups:
+  - name: alphax-agents
+    rules:
+      # A newly-discovered agent that goes down and stays down for >60s.
+      - alert: AlphaXAgentDown
+        expr: |
+          alphax_agents_up == 0
+        for: 1m
+        labels:
+          severity: critical
+          team: agents
+        annotations:
+          summary: "Agent down: {{ $labels.type }}"
+          description: "At least one {{ $labels.type }} agent registered with the AlphaX control plane has been down for over 1 minute."
+          runbook: "https://docs.internal/runbooks/agent-down"
+
+  - name: alphax-queue
+    rules:
+      # A backlog of queued tasks building up beyond the concurrency ceiling.
+      - alert: AlphaXQueueBacklog
+        expr: |
+          alphax_queue_depth{state="queued"} > on() (avg(alphax_queue_depth) or vector(20))
+        for: 2m
+        labels:
+          severity: warning
+          team: agents
+        annotations:
+          summary: "Task queue backlog"
+          description: "Queued tasks have been above the concurrency ceiling for more than 2 minutes. Task throughput may be degrading."
+          runbook: "https://docs.internal/runbooks/queue-backlog"
+
+      - alert: AlphaXQueueCongestion
+        expr: |
+          alphax_queue_depth{state="queued"} * 5 > 100
+        for: 3m
+        labels:
+          severity: warning
+          team: agents
+        annotations:
+          summary: "Task queue congested"
+          description: "Five times the queued depth is above the backlog threshold for 3 minutes. Consider raising concurrency or reducing load."
+
+  - name: alphax-tasks
+    rules:
+      # Sustained task failure rate above 5% over a 5-minute window.
+      - alert: AlphaXHighTaskErrorRate
+        expr: |
+          rate(alphax_tasks_total{status="error"}[5m])
+          /
+          (rate(alphax_tasks_total[5m]) + 0.0001)
+          > 0.05
+        for: 3m
+        labels:
+          severity: warning
+          team: agents
+        annotations:
+          summary: "High task error rate"
+          description: "Task error rate has exceeded 5% for the last 3 minutes. Check the failure-class breakdown in Grafana and recent activity."
+          runbook: "https://docs.internal/runbooks/high-error-rate"
+
+      # P99 task latency above 60s over 5 minutes - gateways feeling slow.
+      - alert: AlphaXSlowTasks
+        expr: |
+          histogram_quantile(0.99, sum(rate(alphax_task_duration_seconds_bucket[5m])) by (le)) > 60
+        for: 5m
+        labels:
+          severity: warning
+          team: agents
+        annotations:
+          summary: "P99 task latency high"
+          description: "P99 task duration has exceeded 60 seconds for the past 5 minutes. Investigate gateway latency and queue load."
+          runbook: "https://docs.internal/runbooks/slow-tasks"
+
+  - name: alphax-host
+    rules:
+      - alert: AlphaXHostCPU
+        expr: |
+          100 - (avg(rate(node_cpu_seconds_total{mode="idle"}[2m])) * 100) > 85
+        for: 5m
+        labels:
+          severity: warning
+          team: infra
+        annotations:
+          summary: "Host CPU above 85%"
+          description: "System CPU use has exceeded 85% for 5 minutes ({{ $value }}%)."
+
+      - alert: AlphaXHostMem
+        expr: |
+          (1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100 > 90
+        for: 5m
+        labels:
+          severity: critical
+          team: infra
+        annotations:
+          summary: "Host memory above 90%"
+          description: "System memory use has exceeded 90% for 5 minutes ({{ $value }}%)."
+
+      - alert: AlphaXDiskFull
+        expr: |
+          (1 - (node_filesystem_avail_bytes{device!~"tmpfs|overlay"} / node_filesystem_size_bytes{device!~"tmpfs|overlay"})) * 100 > 85
+        for: 10m
+        labels:
+          severity: warning
+          team: infra
+        annotations:
+          summary: "Disk filling up"
+          description: "A filesystem is more than 85% full ({{ $value }}%)."
+
+      - alert: AlphaXPrometheusDown
+        expr: |
+          up{job="prometheus"} == 0
+        for: 2m
+        labels:
+          severity: critical
+          team: infra
+        annotations:
+          summary: "Prometheus is down"
+
+  - name: alphax-components
+    rules:
+      - alert: AlphaXCadvisorDown
+        expr: up{job="cadvisor"} == 0
+        for: 2m
+        labels: { severity: warning, team: infra }
+        annotations:
+          summary: "cAdvisor down"
+
+      - alert: AlphaXLokiDown
+        expr: |
+          up{job="loki"} == 0
+        for: 2m
+        labels: { severity: warning, team: infra }
+        annotations:
+          summary: "Loki down"
+
+      - alert: AlphaXNodeExporterDown
+        expr: up{job="node"} == 0
+        for: 2m
+        labels: { severity: critical, team: infra }
+        annotations:
+          summary: "Node exporter down"

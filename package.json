@@ -1,0 +1,25 @@
+{
+  "name": "alphax-agents-os",
+  "version": "1.0.0",
+  "private": true,
+  "description": "AlphaX Agents OS - locally-hosted control plane dashboard for your AI agents (OpenClaw, Hermes, Claude Code, opencode, and more).",
+  "license": "MIT",
+  "workspaces": [
+    "server",
+    "web"
+  ],
+  "engines": {
+    "node": ">=22.13.0"
+  },
+  "scripts": {
+    "install:all": "npm install",
+    "build": "npm run build --workspace server && npm run build --workspace web",
+    "build:server": "npm run build --workspace server",
+    "build:web": "npm run build --workspace web",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "start": "node server/dist/index.js",
+    "dev:server": "npm run dev --workspace server",
+    "dev:web": "npm run dev --workspace web",
+    "test": "npm run typecheck"
+  }
+}

@@ -1,0 +1,57 @@
+server:
+  http_listen_port: 9080
+  grpc_listen_port: 9095
+
+positions:
+  filename: /tmp/positions.yaml
+
+clients:
+  - url: http://loki:3100/loki/api/v1/push
+
+scrape_configs:
+  # AlphaX server JSON logs (console) -> Loki with agent/task labels.
+  - job_name: alphax-server
+    static_configs:
+      - targets: [localhost]
+        labels:
+          job: alphax-server
+          host: ${HOSTNAME:-alphax}
+          __path__: /var/log/alphax/*.log
+    pipeline_stages:
+      - match:
+          selector: '{job="alphax-server"}'
+          stages:
+            - regex:
+                expression: '^(?P<level>\w+)\s(?P<message>.*)$'
+            - labels:
+                level:
+
+  # Host syslog (systemd-journald logs mounted under /var/log).
+  - job_name: systemd-journald
+    syslog:
+      listen_address: 0.0.0.0:1514
+    relabel_configs:
+      - source_labels: ["__syslog_message_hostname"]
+        target_label: host
+      - source_labels: ["__syslog_message_severity"]
+        target_label: severity
+    labels:
+      job: journald
+      host: ${HOSTNAME:-alphax}
+
+  # Docker container logs (all containers -> labels via docker metadata).
+  - job_name: docker
+    docker_sd_configs:
+      - host: unix:///var/run/docker.sock
+        refresh_interval: 15s
+    relabel_configs:
+      - source_labels: ["__meta_docker_container_name"]
+        regex: "/(.*)"
+        target_label: container
+      - source_labels: ["__meta_docker_container_label_com_docker_compose_service"]
+        target_label: service
+    static_configs:
+      - targets: [localhost]
+        labels:
+          job: docker
+          __path__: /var/lib/docker/containers/*/*-json.log

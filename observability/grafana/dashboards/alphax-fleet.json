@@ -1,0 +1,107 @@
+{
+  "title": "AlphaX Fleet Overview",
+  "uid": "alphax-fleet",
+  "version": 1,
+  "refresh": "15s",
+  "time": { "from": "now-6h", "to": "now" },
+  "timezone": "browser",
+  "editable": true,
+  "tags": ["alphax", "fleet"],
+  "templating": { "list": [] },
+  "panels": [
+    {
+      "type": "stat",
+      "title": "Agents Running",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [{ "refId": "A", "expr": "sum(alphax_agents_up)" }],
+      "gridPos": { "h": 4, "w": 4, "x": 0, "y": 0 },
+      "fieldConfig": {
+        "defaults": { "color": { "mode": "thresholds" }, "thresholds": { "mode": "absolute", "steps": [["", { "color": "red" }], ["4", { "color": "yellow" }], ["4", { "color": "green" }]] }, "unit": "short" }
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Tasks Running",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [{ "refId": "A", "expr": "sum(alphax_queue_depth{state=\"running\"})" }],
+      "gridPos": { "h": 4, "w": 4, "x": 4, "y": 0 },
+      "fieldConfig": { "defaults": { "unit": "short", "thresholds": { "mode": "absolute", "steps": [["", { "color": "blue" }]] } } }
+    },
+    {
+      "type": "stat",
+      "title": "Tasks Queued",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [{ "refId": "A", "expr": "sum(alphax_queue_depth{state=\"queued\"})" }],
+      "gridPos": { "h": 4, "w": 4, "x": 8, "y": 0 },
+      "fieldConfig": { "defaults": { "unit": "short", "thresholds": { "mode": "absolute", "steps": [["", { "color": "blue" }]] } } }
+    },
+    {
+      "type": "stat",
+      "title": "Error Rate (5m)",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [{ "refId": "A", "expr": "rate(alphax_tasks_total{status=\"error\"}[5m]) / (rate(alphax_tasks_total[5m]) + 0.0001)" }],
+      "gridPos": { "h": 4, "w": 4, "x": 12, "y": 0 },
+      "fieldConfig": { "defaults": { "unit": "percentunit", "min": 0, "thresholds": { "mode": "absolute", "steps": [["", { "color": "green" }], ["0.05", { "color": "yellow" }], ["0.1", { "color": "red" }]] } } }
+    },
+    {
+      "type": "stat",
+      "title": "Agent Processes",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [{ "refId": "A", "expr": "alphax_agent_processes" }],
+      "gridPos": { "h": 4, "w": 4, "x": 16, "y": 0 },
+      "fieldConfig": { "defaults": { "unit": "short" } }
+    },
+    {
+      "type": "stat",
+      "title": "P99 Task Latency",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [{ "refId": "A", "expr": "histogram_quantile(0.99, sum(rate(alphax_task_duration_seconds_bucket[5m])) by (le))" }],
+      "gridPos": { "h": 4, "w": 4, "x": 20, "y": 0 },
+      "fieldConfig": { "defaults": { "unit": "s", "thresholds": { "mode": "absolute", "steps": [["", { "color": "blue" }], ["60", { "color": "yellow" }]] } } }
+    },
+    {
+      "type": "timeseries",
+      "title": "Task Throughput (by status)",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        { "refId": "A", "expr": "sum(rate(alphax_tasks_total[5m])) by (status)", "legendFormat": "{{status}}" }
+      ],
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 4 },
+      "fieldConfig": { "defaults": { "unit": "ops", "custom": { "drawStyle": "line", "fillOpacity": 10, "lineWidth": 2 } } }
+    },
+    {
+      "type": "timeseries",
+      "title": "Queue Depth (running vs queued)",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        { "refId": "A", "expr": "sum(alphax_queue_depth{state=\"running\"})", "legendFormat": "running" },
+        { "refId": "B", "expr": "sum(alphax_queue_depth{state=\"queued\"})", "legendFormat": "queued" }
+      ],
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 12 },
+      "fieldConfig": { "defaults": { "unit": "short", "custom": { "fillOpacity": 20, "lineWidth": 2 } } }
+    },
+    {
+      "type": "heatmap",
+      "title": "Task Duration Distribution",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [{
+        "refId": "A",
+        "format": "heatmap",
+        "expr": "sum(rate(alphax_task_duration_seconds_bucket[5m])) by (le)"
+      }],
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 12 },
+      "fieldConfig": { "defaults": { "unit": "s" } }
+    },
+    {
+      "type": "timeseries",
+      "title": "HTTP Requests /s by status",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        { "refId": "A", "expr": "sum(rate(alphax_http_requests_total[5m])) by (status)", "legendFormat": "{{status}}" }
+      ],
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 20 },
+      "fieldConfig": { "defaults": { "unit": "reqps", "custom": { "lineWidth": 2 } } }
+    }
+  ],
+  "schemaVersion": 39
+}

@@ -1,0 +1,60 @@
+{
+  "title": "AlphaX Logs (Loki)",
+  "uid": "alphax-logs",
+  "version": 1,
+  "refresh": "30s",
+  "time": { "from": "now-1h", "to": "now" },
+  "timezone": "browser",
+  "editable": true,
+  "tags": ["alphax", "logs"],
+  "templating": {
+    "list": [
+      {
+        "name": "job",
+        "type": "query",
+        "datasource": { "type": "loki", "uid": "loki" },
+        "query": { "expr": "label_values({job=~\".+\"}, job)" },
+        "refresh": 1,
+        "includeAll": true,
+        "allValue": ".+",
+        "current": { "text": "All", "value": "$__all", "selected": true },
+        "multi": true
+      },
+      {
+        "name": "level",
+        "type": "query",
+        "datasource": { "type": "loki", "uid": "loki" },
+        "query": { "expr": "label_values({job=\".+\"}, level)" },
+        "refresh": 1,
+        "includeAll": true,
+        "allValue": ".+",
+        "current": { "text": "All", "value": "$__all", "selected": true },
+        "multi": true
+      }
+    ]
+  },
+  "panels": [
+    {
+      "type": "logs",
+      "title": "AlphaX Server Logs",
+      "datasource": { "type": "loki", "uid": "loki" },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "{job=~\"$job\", level=~\"$level\"} |= $__varAll",
+          "legendFormat": ""
+        }
+      ],
+      "gridPos": { "h": 12, "w": 24, "x": 0, "y": 0 },
+      "options": {
+        "showLabels": true,
+        "showTime": true,
+        "sortOrder": "Descending",
+        "wrapLogMessage": true,
+        "dedupStrategy": "none"
+      }
+    }
+  ],
+  "time": { "from": "now-1h", "to": "now" },
+  "schemaVersion": 39
+}
