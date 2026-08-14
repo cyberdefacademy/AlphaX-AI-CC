@@ -10,6 +10,7 @@ import { interruptStale } from './tasks';
 import { sampleAndRecord } from './metrics';
 import { enableFileLogging } from './logger';
 import { initSecuritySchema, audit } from './security';
+import { initOrchestrationSchema } from './orchestration';
 
 const BANNER = `
   █████╗ ██╗     ██████╗ ██╗  ██╗ █████╗ ██╗  ██╗
@@ -24,6 +25,7 @@ async function main() {
   const cfg = defaultConfig();
   getDb();
   initSecuritySchema();
+  initOrchestrationSchema();
   enableFileLogging();
   const interrupted = interruptStale();
 
@@ -70,6 +72,7 @@ async function main() {
     }
     console.log('  Auth        : session cookies, local-only bind');
     console.log('  Security    : policy + approvals + audit ledger enabled');
+    console.log('  Missions    : orchestration API enabled');
     if (interrupted) console.log(`  Tasks      : ${interrupted} left in a stale state marked interrupted`);
     console.log('');
 
