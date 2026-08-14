@@ -7,6 +7,7 @@ import { router as systemRouter } from './routes/system';
 import { router as agentsRouter } from './routes/agents';
 import { router as activityRouter } from './routes/activity';
 import { router as tasksRouter } from './routes/tasks';
+import { router as securityRouter } from './routes/security';
 import { prometheusHandler, observeHttp } from './metricsProm';
 import { error as logError } from './logger';
 
@@ -31,7 +32,7 @@ export function createApp(): Express {
   });
 
   app.get('/api/health', (_req, res) => {
-    res.json({ ok: true, name: 'alphax-agents-os', time: new Date().toISOString() });
+    res.json({ ok: true, name: 'alphax-agents-os', securityControlPlane: 'enabled', time: new Date().toISOString() });
   });
 
   app.use((req: Request, res: Response, next: NextFunction) => {
@@ -41,6 +42,7 @@ export function createApp(): Express {
 
   app.use('/api/auth', authRouter);
   app.use('/api/system', systemRouter);
+  app.use('/api/security', securityRouter);
   app.use('/api/agents', agentsRouter);
   app.use('/api/activity', activityRouter);
   app.use('/api/tasks', tasksRouter);
@@ -61,13 +63,10 @@ export function createApp(): Express {
     });
   } else {
     app.get('/', (_req, res) => {
-      res
-        .status(200)
-        .type('text/plain')
-        .send(
-          'AlphaX Agents OS server is running but the web UI has not been built yet.\n\n' +
-            'Run `npm run build` at the project root, then restart with `npm start`.'
-        );
+      res.status(200).type('text/plain').send(
+        'AlphaX Agents OS server is running but the web UI has not been built yet.\n\n' +
+        'Run `npm run build` at the project root, then restart with `npm start`.'
+      );
     });
   }
 
