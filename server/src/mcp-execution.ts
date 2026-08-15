@@ -1,6 +1,7 @@
 import { getDb } from './db';
 import { authorizeTool, recordToolCall, type ToolRequest } from './mcp';
-import { requireApprovedApproval, type SecurityContext } from './security';
+import { type SecurityContext } from './security';
+import { requireApprovedApproval } from './approval-queue';
 import { GovernedMcpAdapter } from './mcp-adapters';
 import { assertExecutionEnabled } from './safety';
 import { assertTargetInScope } from './scope';
@@ -11,7 +12,7 @@ export async function executeGovernedMcp(ctx:SecurityContext,req:ToolRequest,app
   assertTargetInScope(ctx.actor,ctx.projectId,req.target);
   const auth=authorizeTool(ctx,req);
   if(auth.decision==='deny') throw new Error('policy denied tool execution');
-  if(auth.approvalRequired){if(!approvalId) return {status:'approval_required',tool:auth.tool.name}; requireApprovedApproval(approvalId,{...ctx,tool:auth.tool.name,target:req.target,risk:auth.tool.risk});}
+  if(auth.approvalRequired){if(!approvalId) return {status:'approval_required',tool:auth.tool.name};requireApprovedApproval(approvalId,{...ctx,tool:auth.tool.name,target:req.target,risk:auth.tool.risk},req.missionId,req.taskId,req.agentId);}
   const callId=recordToolCall(ctx,req,'approved',approvalId);
   const row:any=getDb().prepare('SELECT id,name,endpoint,enabled FROM mcp_servers WHERE id=?').get(auth.tool.server);
   if(!row) throw new Error(`MCP server '${auth.tool.server}' is not registered`);
