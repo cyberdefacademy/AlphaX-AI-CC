@@ -16,6 +16,7 @@ It discovers, registers, monitors, and controls AI agents (OpenClaw, Hermes Agen
 - [Threat Model](docs/THREAT-MODEL.md) — AI/MCP trust boundaries and attack scenarios
 - [Kali + HexStrike MCP](docs/MCP-KALI-HEXSTRIKE.md) — governed MCP integration design
 - [Phase 3 MCP Implementation](docs/PHASE-3-MCP.md) — dynamic provider discovery, health, schemas, normalization and safe validation
+- [Phase 4 Intelligence](docs/PHASE-4-INTELLIGENCE.md) — normalization, ATT&CK candidates, evidence, findings, correlation, deduplication and analyst review
 - [Operations Runbook](docs/OPERATIONS.md) — installation, operation and recovery
 - [ATT&CK + Evidence](docs/ATTACK-AUDIT.md) — intelligence, findings and provenance
 - [Roadmap](docs/ROADMAP.md) — implementation phases and definition of done
@@ -58,7 +59,7 @@ npm run dev:web
 | Authentication | Persistent sessions, password hashing, TOTP MFA, revocation and login-abuse controls. |
 | MCP governance | Registered providers/tools, dynamic discovery, schema validation, risk gates, scope context and execution receipts. |
 | Mission orchestration | Bounded planning, worker leases, typed handoffs and adaptive feedback. |
-| Intelligence | Result normalization, ATT&CK candidate mapping and finding/evidence correlation. |
+| Intelligence | Deterministic result normalization, ATT&CK candidate mapping, evidence extraction, finding correlation, deduplication, confidence scoring and analyst review. |
 | Audit | Tamper-evident security audit records and mission timelines. |
 | Observability | Prometheus metrics and optional Grafana/Loki stack. |
 
