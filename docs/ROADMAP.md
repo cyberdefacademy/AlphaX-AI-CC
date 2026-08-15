@@ -44,7 +44,7 @@ Status: **complete / merged to main**
 
 ## Phase 4 — Intelligence
 
-Status: **implementation complete / validation pending**
+Status: **complete / merged to main**
 
 - [x] deterministic result normalization and persistence
 - [x] bounded ATT&CK candidate mapper
@@ -58,14 +58,20 @@ Status: **implementation complete / validation pending**
 
 ## Phase 5 — Operator experience
 
-- live mission timeline
-- task queue view
-- approval center
-- MCP/provider health page
-- ATT&CK coverage dashboard
-- evidence/finding explorer
-- audit explorer
-- emergency-stop control with confirmation
+Status: **in progress**
+
+- [x] operator console shell
+- [x] live control-plane/provider health polling
+- [x] approval center with governed approve/deny actions
+- [x] finding explorer
+- [x] ATT&CK coverage summary
+- [x] navigation to mission timeline, audit activity and security center
+- [ ] richer live mission timeline with WebSocket event rendering
+- [ ] task queue controls and explicit cancellation UX
+- [ ] evidence/custody detail viewer
+- [ ] ATT&CK tactic/technique drill-down
+- [ ] audit integrity verification view
+- [ ] emergency-stop API and confirmation workflow
 
 ## Phase 6 — Production hardening
 
