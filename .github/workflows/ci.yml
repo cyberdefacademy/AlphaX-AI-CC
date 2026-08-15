@@ -29,6 +29,8 @@ jobs:
         run: npm run build
       - name: Security regression
         run: npm run test:security --workspace server
+      - name: Safety regression
+        run: npm run test:safety --workspace server
       - name: MCP provider self-test
         run: npm run test:mcp --workspace server
       - name: Intelligence regression
