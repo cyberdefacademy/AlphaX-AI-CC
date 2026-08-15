@@ -2,7 +2,9 @@
 
 ## Status
 
-Implementation complete on the Phase 3 branch; validation and review are required before merge.
+**Complete / merged to `main`.** Phase 3 was implemented in PR #10 and merged as commit `b68368566a4a3e255fb91c22e904f182b45cb006`.
+
+The implementation provides the governed provider boundary required to connect Kali MCP and HexStrike MCP without duplicating their security-tool implementations inside AlphaX.
 
 ## What is implemented
 
@@ -20,6 +22,7 @@ Implementation complete on the Phase 3 branch; validation and review are require
 - Provider-specific result normalization preserves structured data while producing a bounded operator summary.
 - Existing policy, RBAC, scope, approval, emergency-stop, receipt and audit controls remain mandatory.
 - Stale discovered tools are disabled when a provider inventory is refreshed.
+- A safe MCP self-test is included in CI and performs no network or security-tool execution.
 
 ## Runtime configuration
 
@@ -67,7 +70,11 @@ The upstream provider never decides whether an AlphaX action is permitted. Provi
 - `GET /api/mcp/tools` — governed registered tools.
 - `POST /api/mcp/execute` — governed execution path; direct provider calls bypassing this route are not part of the AlphaX control plane.
 
-## Safe validation
+## Validation status
+
+The repository-level validation is covered by type checking, build validation, security regression coverage and the offline MCP provider self-test. Live provider validation must still be performed in the operator's authorized lab/engagement environment because GitHub CI must not execute Kali or HexStrike security tools against real targets.
+
+### Safe operator validation
 
 1. Start AlphaX with only loopback providers enabled.
 2. Confirm the provider appears under `/api/mcp/providers/`.
