@@ -1,12 +1,14 @@
 import { randomBytes, scryptSync, timingSafeEqual } from 'node:crypto';
 import { getDb, nowIso, randomId } from './db';
 import type { SessionRole } from './auth-session';
+import { protectTotpSecret } from './totp';
 
 export interface AuthUser {
   id: string;
   username: string;
   role: SessionRole;
   enabled: boolean;
+  totpEnabled: boolean;
   createdAt: string;
   updatedAt: string;
   lastLoginAt: string | null;
@@ -28,12 +30,17 @@ export function initUserSchema(): void {
       password_hash TEXT NOT NULL,
       role TEXT NOT NULL,
       enabled INTEGER NOT NULL DEFAULT 1,
+      totp_secret_enc TEXT,
+      totp_enabled INTEGER NOT NULL DEFAULT 0,
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL,
       last_login_at TEXT
     );
     CREATE INDEX IF NOT EXISTS idx_auth_users_enabled ON auth_users(enabled);
   `);
+  const columns = db.prepare('PRAGMA table_info(auth_users)').all() as unknown as { name: string }[];
+  if (!columns.some((column) => column.name === 'totp_secret_enc')) db.exec('ALTER TABLE auth_users ADD COLUMN totp_secret_enc TEXT');
+  if (!columns.some((column) => column.name === 'totp_enabled')) db.exec('ALTER TABLE auth_users ADD COLUMN totp_enabled INTEGER NOT NULL DEFAULT 0');
 }
 
 function hashPassword(password: string, salt: Buffer): Buffer {
@@ -50,17 +57,13 @@ function normalizeUsername(username: string): string {
 }
 
 export function validatePassword(password: string): void {
-  if (typeof password !== 'string' || password.length < 12) {
-    throw new Error('password must be at least 12 characters');
-  }
+  if (typeof password !== 'string' || password.length < 12) throw new Error('password must be at least 12 characters');
   if (password.length > 256) throw new Error('password is too long');
 }
 
 export function validateUsername(username: string): string {
   const normalized = normalizeUsername(username);
-  if (!/^[a-z0-9][a-z0-9._-]{2,63}$/.test(normalized)) {
-    throw new Error('username must be 3-64 characters using letters, numbers, dot, underscore or hyphen');
-  }
+  if (!/^[a-z0-9][a-z0-9._-]{2,63}$/.test(normalized)) throw new Error('username must be 3-64 characters using letters, numbers, dot, underscore or hyphen');
   return normalized;
 }
 
@@ -70,10 +73,7 @@ export function ensureBootstrapAdmin(): AuthUser {
   if (existing) return mapUser(existing);
   const now = nowIso();
   const record = passwordRecord(randomBytes(48).toString('base64url'));
-  getDb().prepare(`
-    INSERT INTO auth_users(id,username,password_salt,password_hash,role,enabled,created_at,updated_at)
-    VALUES(?,?,?,?,?,1,?,?)
-  `).run(randomId(), 'admin', record.salt, record.hash, 'admin', now, now);
+  getDb().prepare(`INSERT INTO auth_users(id,username,password_salt,password_hash,role,enabled,totp_enabled,created_at,updated_at) VALUES(?,?,?,?,?,1,0,?,?)`).run(randomId(), 'admin', record.salt, record.hash, 'admin', now, now);
   return getUserByUsername('admin')!;
 }
 
@@ -84,6 +84,7 @@ function mapUser(row: Record<string, unknown>): AuthUser {
     username: String(row.username),
     role: row.role as SessionRole,
     enabled: Number(row.enabled) === 1,
+    totpEnabled: Number(row.totp_enabled) === 1,
     createdAt: String(row.created_at),
     updatedAt: String(row.updated_at),
     lastLoginAt: row.last_login_at ? String(row.last_login_at) : null,
@@ -117,20 +118,16 @@ export function authenticateUser(username: string, password: string): AuthUser |
   return getUserById(String(row.id));
 }
 
-export function createUser(username: string, password: string, role: SessionRole): { user: AuthUser; generatedPassword?: string } {
+export function createUser(username: string, password: string, role: SessionRole): { user: AuthUser } {
   const normalized = validateUsername(username);
   if (!isSessionRole(role)) throw new Error('invalid role');
   validatePassword(password);
   initUserSchema();
-  const existing = getUserByUsername(normalized);
-  if (existing) throw new Error('username already exists');
+  if (getUserByUsername(normalized)) throw new Error('username already exists');
   const now = nowIso();
   const record = passwordRecord(password);
   const id = randomId();
-  getDb().prepare(`
-    INSERT INTO auth_users(id,username,password_salt,password_hash,role,enabled,created_at,updated_at)
-    VALUES(?,?,?,?,?,1,?,?)
-  `).run(id, normalized, record.salt, record.hash, role, now, now);
+  getDb().prepare(`INSERT INTO auth_users(id,username,password_salt,password_hash,role,enabled,totp_enabled,created_at,updated_at) VALUES(?,?,?,?,?,1,0,?,?)`).run(id, normalized, record.salt, record.hash, role, now, now);
   return { user: getUserById(id)! };
 }
 
@@ -171,5 +168,29 @@ export function setUserPassword(id: string, password: string): AuthUser {
   const record = passwordRecord(password);
   const now = nowIso();
   getDb().prepare('UPDATE auth_users SET password_salt=?,password_hash=?,updated_at=? WHERE id=?').run(record.salt, record.hash, now, id);
+  return getUserById(id)!;
+}
+
+export function stageTotpSecret(id: string, secret: string): AuthUser {
+  const user = getUserById(id);
+  if (!user) throw new Error('user not found');
+  const now = nowIso();
+  getDb().prepare('UPDATE auth_users SET totp_secret_enc=?,totp_enabled=0,updated_at=? WHERE id=?').run(protectTotpSecret(secret), now, id);
+  return getUserById(id)!;
+}
+
+export function getStoredTotpSecret(id: string): string | null {
+  initUserSchema();
+  const row = getDb().prepare('SELECT totp_secret_enc FROM auth_users WHERE id=?').get(id) as { totp_secret_enc:string|null } | undefined;
+  if (!row?.totp_secret_enc) return null;
+  return row.totp_secret_enc;
+}
+
+export function setTotpEnabled(id: string, enabled: boolean): AuthUser {
+  const user = getUserById(id);
+  if (!user) throw new Error('user not found');
+  if (enabled && !getStoredTotpSecret(id)) throw new Error('TOTP enrollment is not staged');
+  const now = nowIso();
+  getDb().prepare('UPDATE auth_users SET totp_enabled=?,updated_at=? WHERE id=?').run(enabled ? 1 : 0, now, id);
   return getUserById(id)!;
 }
