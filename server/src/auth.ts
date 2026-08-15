@@ -1,13 +1,15 @@
-import { createHash, randomBytes, scryptSync, timingSafeEqual } from 'crypto';
+import { randomBytes, scryptSync, timingSafeEqual } from 'crypto';
 import { getSetting, setSetting, addActivity } from './db';
+import {
+  createPersistentSession,
+  destroyPersistentSession,
+  getPersistentSession,
+  purgeExpiredSessions,
+  type SessionPrincipal,
+  type SessionRole,
+} from './auth-session';
 
-const SESSION_TTL_MS = 1000 * 60 * 60 * 24 * 30;
-const sessions = new Map<string, { expiresAt:number; role:string }>();
-
-function hashToken(raw: string): string {
-  const salt = getSetting('auth.salt');
-  return scryptSync(raw, salt, 64).toString('hex');
-}
+export type { SessionRole } from './auth-session';
 
 export function tokenConfigured(): boolean { return Boolean(getSetting('auth.token_hash')); }
 
@@ -29,28 +31,22 @@ export function verifyToken(raw: string): boolean {
   return derived.length === expected.length && timingSafeEqual(derived, expected);
 }
 
-export function createSession(role='admin'): string {
-  const id = randomBytes(24).toString('hex');
-  sessions.set(id, { expiresAt:Date.now() + SESSION_TTL_MS, role });
-  return id;
+export function createSession(role: SessionRole = 'admin'): string {
+  purgeExpiredSessions();
+  return createPersistentSession(role);
+}
+
+export function getSessionPrincipal(id: string): SessionPrincipal | null {
+  return getPersistentSession(id);
 }
 
 export function validSession(id: string): boolean {
-  const session = sessions.get(id);
-  if (!session) return false;
-  if (session.expiresAt < Date.now()) { sessions.delete(id); return false; }
-  return true;
+  return getPersistentSession(id) !== null;
 }
 
-export function getSessionPrincipal(id: string): { actor:string; role:string } | null {
-  if (!validSession(id)) return null;
-  const session = sessions.get(id);
-  if (!session) return null;
-  const actor = `session:${createHash('sha256').update(id).digest('hex').slice(0,16)}`;
-  return { actor, role:session.role };
+export function destroySession(id: string): void {
+  destroyPersistentSession(id);
 }
-
-export function destroySession(id: string): void { sessions.delete(id); }
 
 export function parseCookies(header: string): Record<string, string> {
   const out: Record<string, string> = {};
