@@ -5,144 +5,15 @@ import { hub } from './ws';
 import { enqueue, queueState } from './queue';
 import { classifyResult, type FailClass } from './classify';
 import { observeTaskFinish } from './metricsProm';
+import { assertExecutionEnabled } from './safety';
 import type { TaskOptions } from './adapters';
 
-export interface TaskRow {
-  id: string;
-  ts: string;
-  agent_id: string;
-  instance: string | null;
-  prompt: string;
-  status: string;
-  class?: string | null;
-  result: string | null;
-  duration_ms: number | null;
-}
-
-export function listTasks(limit = 100): TaskRow[] {
-  return getDb()
-    .prepare('SELECT * FROM tasks ORDER BY ts DESC LIMIT ?')
-    .all(limit) as unknown as TaskRow[];
-}
-
-export function getTask(id: string): TaskRow | null {
-  const r = getDb().prepare('SELECT * FROM tasks WHERE id = ?').get(id) as unknown as TaskRow | undefined;
-  return r || null;
-}
-
-export function createTaskRecord(agentId: string, instance: string, prompt: string): TaskRow {
-  const rec: TaskRow = {
-    id: randomId(),
-    ts: nowIso(),
-    agent_id: agentId,
-    instance: instance || null,
-    prompt,
-    status: 'queued',
-    class: null,
-    result: '',
-    duration_ms: null,
-  };
-  getDb()
-    .prepare(
-      'INSERT INTO tasks (id, ts, agent_id, instance, prompt, status, class, result, duration_ms) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
-    )
-    .run(rec.id, rec.ts, rec.agent_id, rec.instance, rec.prompt, rec.status, rec.class ?? null, rec.result, null);
-  return rec;
-}
-
-export function updateTask(
-  id: string,
-  patch: { status?: string; class?: FailClass | null; result?: string; duration_ms?: number }
-): void {
-  const cur = getTask(id);
-  if (!cur) return;
-  getDb()
-    .prepare('UPDATE tasks SET status = ?, class = ?, result = ?, duration_ms = ? WHERE id = ?')
-    .run(
-      patch.status ?? cur.status,
-      patch.class ?? cur.class ?? null,
-      patch.result ?? cur.result ?? '',
-      patch.duration_ms ?? cur.duration_ms,
-      id
-    );
-}
-
-export function interruptStale(): number {
-  const r = getDb()
-    .prepare("UPDATE tasks SET status = 'interrupted', class = 'timeout' WHERE status = 'running' OR status = 'queued'")
-    .run();
-  return Number((r as unknown as { changes: number }).changes);
-}
-
-function runTask(task: TaskRow, agentId: string, instance: string | undefined, prompt: string, timeout?: number) {
-  const started = Date.now();
-  let out = '';
-  const opts: TaskOptions = { prompt, instance, timeout: timeout ?? 300000 };
-  const execute = async () => {
-    updateTask(task.id, { status: 'running' });
-    hub.broadcast('task:running', { taskId: task.id });
-    try {
-      const agent = getRegistered(agentId);
-      if (!agent) throw new Error('Agent no longer registered');
-      const adapter = adapterFor(agent.type);
-      if (!adapter) throw new Error('No adapter for agent type ' + agent.type);
-      const result = await adapter.sendMessage(agent, opts, (line, isErr) => {
-        const chunk = isErr ? '[err] ' + line : line;
-        out += (out ? '\n' : '') + chunk;
-        hub.broadcast('task:line', { taskId: task.id, line: chunk });
-      });
-      const status = result.ok ? 'done' : 'error';
-      const cls = classifyResult({
-        status,
-        stdout: result.stdout,
-        stderr: result.stderr,
-        code: result.code,
-        duration_ms: Date.now() - started,
-        timeout_ms: timeout ?? 300000,
-      });
-      updateTask(task.id, { status, class: cls.class, result: (out || result.stdout || '').slice(0, 40000), duration_ms: Date.now() - started });
-      observeTaskFinish(status as 'done' | 'error', (Date.now() - started) / 1000);
-      addActivity(
-        result.ok ? 'task_done' : 'task_error',
-        result.ok ? 'Task completed for ' + agent.name : 'Task failed for ' + agent.name + ' (' + cls.label + ')',
-        agentId,
-        { taskId: task.id, class: cls.class, prompt: prompt.slice(0, 200) }
-      );
-      hub.broadcast('task:done', { taskId: task.id, ok: result.ok, code: result.code, class: cls.class, fix: cls.fix });
-    } catch (e) {
-      const msg = String((e as Error).message || e);
-      out += (out ? '\n' : '') + 'Error: ' + msg;
-      const cls = classifyResult({ status: 'error', stderr: out, duration_ms: Date.now() - started, timeout_ms: timeout ?? 300000 });
-      updateTask(task.id, { status: 'error', class: cls.class, result: out, duration_ms: Date.now() - started });
-      observeTaskFinish('error', (Date.now() - started) / 1000);
-      const agentName = getRegistered(agentId);
-      addActivity('task_error', 'Task failed for ' + (agentName?.name || 'agent') + ' (' + cls.label + ')', agentId, {
-        taskId: task.id,
-        class: cls.class,
-        error: msg,
-      });
-      hub.broadcast('task:done', { taskId: task.id, ok: false, error: msg, class: cls.class, fix: cls.fix });
-    }
-    hub.broadcast('tasks:changed', { taskId: task.id });
-  };
-  enqueue({ taskId: task.id, agentId, run: execute });
-}
-
-export async function runAgentTask(
-  agentId: string,
-  instance: string | undefined,
-  prompt: string,
-  timeout?: number
-): Promise<TaskRow> {
-  const agent = getRegistered(agentId);
-  if (!agent) throw new Error('Agent not registered');
-
-  const task = createTaskRecord(agentId, instance || '', prompt);
-  hub.broadcast('task:started', { taskId: task.id, agentId, instance: instance || null });
-  runTask(task, agentId, instance, prompt, timeout);
-  return task;
-}
-
-export function queuePositions(): Record<string, number> {
-  return queueState().positions;
-}
+export interface TaskRow { id:string; ts:string; agent_id:string; instance:string|null; prompt:string; status:string; class?:string|null; result:string|null; duration_ms:number|null; }
+export function listTasks(limit=100):TaskRow[]{return getDb().prepare('SELECT * FROM tasks ORDER BY ts DESC LIMIT ?').all(limit) as unknown as TaskRow[];}
+export function getTask(id:string):TaskRow|null{const r=getDb().prepare('SELECT * FROM tasks WHERE id = ?').get(id) as unknown as TaskRow|undefined;return r||null;}
+export function createTaskRecord(agentId:string,instance:string,prompt:string):TaskRow{const rec:TaskRow={id:randomId(),ts:nowIso(),agent_id:agentId,instance:instance||null,prompt,status:'queued',class:null,result:'',duration_ms:null};getDb().prepare('INSERT INTO tasks (id, ts, agent_id, instance, prompt, status, class, result, duration_ms) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)').run(rec.id,rec.ts,rec.agent_id,rec.instance,rec.prompt,rec.status,rec.class??null,rec.result,null);return rec;}
+export function updateTask(id:string,patch:{status?:string;class?:FailClass|null;result?:string;duration_ms?:number}):void{const cur=getTask(id);if(!cur)return;getDb().prepare('UPDATE tasks SET status = ?, class = ?, result = ?, duration_ms = ? WHERE id = ?').run(patch.status??cur.status,patch.class??cur.class??null,patch.result??cur.result??'',patch.duration_ms??cur.duration_ms,id);}
+export function interruptStale():number{const r=getDb().prepare("UPDATE tasks SET status = 'interrupted', class = 'timeout' WHERE status = 'running' OR status = 'queued'").run();return Number((r as unknown as {changes:number}).changes);}
+function runTask(task:TaskRow,agentId:string,instance:string|undefined,prompt:string,timeout?:number){const started=Date.now();let out='';const opts:TaskOptions={prompt,instance,timeout:timeout??300000};const execute=async()=>{try{assertExecutionEnabled();updateTask(task.id,{status:'running'});hub.broadcast('task:running',{taskId:task.id});const agent=getRegistered(agentId);if(!agent)throw new Error('Agent no longer registered');const adapter=adapterFor(agent.type);if(!adapter)throw new Error('No adapter for agent type '+agent.type);assertExecutionEnabled();const result=await adapter.sendMessage(agent,opts,(line,isErr)=>{const chunk=isErr?'[err] '+line:line;out+=(out?'\n':'')+chunk;hub.broadcast('task:line',{taskId:task.id,line:chunk});});const status=result.ok?'done':'error';const cls=classifyResult({status,stdout:result.stdout,stderr:result.stderr,code:result.code,duration_ms:Date.now()-started,timeout_ms:timeout??300000});updateTask(task.id,{status,class:cls.class,result:(out||result.stdout||'').slice(0,40000),duration_ms:Date.now()-started});observeTaskFinish(status as 'done'|'error',(Date.now()-started)/1000);addActivity(result.ok?'task_done':'task_error',result.ok?'Task completed for '+agent.name:'Task failed for '+agent.name+' ('+cls.label+')',agentId,{taskId:task.id,class:cls.class,prompt:prompt.slice(0,200)});hub.broadcast('task:done',{taskId:task.id,ok:result.ok,code:result.code,class:cls.class,fix:cls.fix});}catch(e){const msg=String((e as Error).message||e);out+=(out?'\n':'')+'Error: '+msg;const cls=classifyResult({status:'error',stderr:out,duration_ms:Date.now()-started,timeout_ms:timeout??300000});updateTask(task.id,{status:'error',class:cls.class,result:out,duration_ms:Date.now()-started});observeTaskFinish('error',(Date.now()-started)/1000);const agentName=getRegistered(agentId);addActivity('task_error','Task failed for '+(agentName?.name||'agent')+' ('+cls.label+')',agentId,{taskId:task.id,class:cls.class,error:msg});hub.broadcast('task:done',{taskId:task.id,ok:false,error:msg,class:cls.class,fix:cls.fix});}hub.broadcast('tasks:changed',{taskId:task.id});};enqueue({taskId:task.id,agentId,run:execute});}
+export async function runAgentTask(agentId:string,instance:string|undefined,prompt:string,timeout?:number):Promise<TaskRow>{const agent=getRegistered(agentId);if(!agent)throw new Error('Agent not registered');assertExecutionEnabled();const task=createTaskRecord(agentId,instance||'',prompt);hub.broadcast('task:started',{taskId:task.id,agentId,instance:instance||null});runTask(task,agentId,instance,prompt,timeout);return task;}
+export function queuePositions():Record<string,number>{return queueState().positions;}
