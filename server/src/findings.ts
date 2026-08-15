@@ -2,8 +2,70 @@ import { getDb, nowIso, randomId } from './db';
 import { audit } from './security';
 import { mapFinding, techniquesForFinding } from './mitre';
 
-export type FindingStatus='open'|'validated'|'rejected'|'closed';
-export function initFindingsSchema():void{getDb().exec(`CREATE TABLE IF NOT EXISTS security_findings(id TEXT PRIMARY KEY,mission_id TEXT,task_id TEXT,title TEXT NOT NULL,description TEXT NOT NULL,severity TEXT NOT NULL DEFAULT 'info',confidence REAL NOT NULL DEFAULT 0,status TEXT NOT NULL DEFAULT 'open',evidence_id TEXT,created_by TEXT NOT NULL,created_at TEXT NOT NULL,updated_at TEXT NOT NULL);CREATE INDEX IF NOT EXISTS idx_findings_mission ON security_findings(mission_id);`);}
-export function createFinding(actor:string,input:{missionId?:string;taskId?:string;title:string;description:string;severity?:string;confidence?:number;evidenceId?:string;techniques?:{id:string;confidence?:number}[]}):string{const id=randomId(),ts=nowIso();getDb().prepare('INSERT INTO security_findings(id,mission_id,task_id,title,description,severity,confidence,status,evidence_id,created_by,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)').run(id,input.missionId??null,input.taskId??null,input.title,input.description,input.severity??'info',Math.max(0,Math.min(1,input.confidence??0)),'open',input.evidenceId??null,actor,ts,ts);for(const t of input.techniques??[])mapFinding(id,t.id,t.confidence??input.confidence??0,actor);audit(actor,'finding.created',id,'allow',{severity:input.severity??'info'});return id;}
-export function validateFinding(actor:string,id:string,valid:boolean,confidence?:number):void{const status:FindingStatus=valid?'validated':'rejected';getDb().prepare('UPDATE security_findings SET status=?,confidence=COALESCE(?,confidence),updated_at=? WHERE id=?').run(status,confidence??null,nowIso(),id);audit(actor,'finding.validation',id,valid?'allow':'deny',{confidence});}
-export function listFindings():unknown[]{return getDb().prepare('SELECT * FROM security_findings ORDER BY created_at DESC').all().map((f:any)=>({...f,techniques:techniquesForFinding(f.id)}));}
+export type FindingStatus = 'open' | 'validated' | 'rejected' | 'closed';
+
+export function initFindingsSchema(): void {
+  const db = getDb();
+  db.exec(`CREATE TABLE IF NOT EXISTS security_findings(
+    id TEXT PRIMARY KEY, mission_id TEXT, task_id TEXT, title TEXT NOT NULL,
+    description TEXT NOT NULL, severity TEXT NOT NULL DEFAULT 'info', confidence REAL NOT NULL DEFAULT 0,
+    status TEXT NOT NULL DEFAULT 'open', evidence_id TEXT, created_by TEXT NOT NULL,
+    created_at TEXT NOT NULL, updated_at TEXT NOT NULL
+  ); CREATE INDEX IF NOT EXISTS idx_findings_mission ON security_findings(mission_id);`);
+  const columns = db.prepare('PRAGMA table_info(security_findings)').all() as unknown as { name: string }[];
+  if (!columns.some((c) => c.name === 'fingerprint')) db.exec('ALTER TABLE security_findings ADD COLUMN fingerprint TEXT');
+  if (!columns.some((c) => c.name === 'source_result_id')) db.exec('ALTER TABLE security_findings ADD COLUMN source_result_id TEXT');
+  if (!columns.some((c) => c.name === 'reviewed_by')) db.exec('ALTER TABLE security_findings ADD COLUMN reviewed_by TEXT');
+  if (!columns.some((c) => c.name === 'reviewed_at')) db.exec('ALTER TABLE security_findings ADD COLUMN reviewed_at TEXT');
+  db.exec('CREATE INDEX IF NOT EXISTS idx_findings_fingerprint ON security_findings(mission_id,fingerprint)');
+}
+
+function clamp(n: number): number { return Math.max(0, Math.min(1, n)); }
+
+export function createFinding(actor: string, input: {
+  missionId?: string; taskId?: string; title: string; description: string; severity?: string;
+  confidence?: number; evidenceId?: string; techniques?: { id: string; confidence?: number }[];
+  fingerprint?: string; sourceResultId?: string;
+}): string {
+  const db = getDb();
+  if (input.fingerprint) {
+    const existing = db.prepare('SELECT id FROM security_findings WHERE mission_id IS ? AND fingerprint=? LIMIT 1').get(input.missionId ?? null, input.fingerprint) as { id: string } | undefined;
+    if (existing) return existing.id;
+  }
+  const id = randomId(), ts = nowIso();
+  db.prepare(`INSERT INTO security_findings(id,mission_id,task_id,title,description,severity,confidence,status,evidence_id,created_by,created_at,updated_at,fingerprint,source_result_id) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
+    .run(id, input.missionId ?? null, input.taskId ?? null, input.title, input.description, input.severity ?? 'info', clamp(input.confidence ?? 0), 'open', input.evidenceId ?? null, actor, ts, ts, input.fingerprint ?? null, input.sourceResultId ?? null);
+  for (const t of input.techniques ?? []) mapFinding(id, t.id, t.confidence ?? input.confidence ?? 0, actor);
+  audit(actor, 'finding.created', id, 'allow', { severity: input.severity ?? 'info', sourceResultId: input.sourceResultId });
+  return id;
+}
+
+export function validateFinding(actor: string, id: string, valid: boolean, confidence?: number): void {
+  const status: FindingStatus = valid ? 'validated' : 'rejected';
+  const ts = nowIso();
+  getDb().prepare('UPDATE security_findings SET status=?,confidence=COALESCE(?,confidence),reviewed_by=?,reviewed_at=?,updated_at=? WHERE id=?')
+    .run(status, confidence === undefined ? null : clamp(confidence), actor, ts, ts, id);
+  audit(actor, 'finding.validation', id, valid ? 'allow' : 'deny', { confidence });
+}
+
+export function closeFinding(actor: string, id: string): void {
+  const ts = nowIso();
+  getDb().prepare('UPDATE security_findings SET status=\'closed\',reviewed_by=?,reviewed_at=?,updated_at=? WHERE id=?').run(actor, ts, ts, id);
+  audit(actor, 'finding.closed', id, 'allow');
+}
+
+export function getFinding(id: string): unknown {
+  const finding = getDb().prepare('SELECT * FROM security_findings WHERE id=?').get(id) as Record<string, unknown> | undefined;
+  if (!finding) throw new Error('finding not found');
+  return { ...finding, techniques: techniquesForFinding(id) };
+}
+
+export function listFindings(filters: { missionId?: string; status?: FindingStatus } = {}): unknown[] {
+  const db = getDb();
+  let sql = 'SELECT * FROM security_findings WHERE 1=1';
+  const args: unknown[] = [];
+  if (filters.missionId) { sql += ' AND mission_id=?'; args.push(filters.missionId); }
+  if (filters.status) { sql += ' AND status=?'; args.push(filters.status); }
+  sql += ' ORDER BY created_at DESC LIMIT 500';
+  return (db.prepare(sql).all(...args) as Record<string, unknown>[]).map((f) => ({ ...f, techniques: techniquesForFinding(String(f.id)) }));
+}
