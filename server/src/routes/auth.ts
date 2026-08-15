@@ -8,6 +8,7 @@ import {
   getSessionPrincipal,
   parseCookies,
   revokeSessionsForUser,
+  tokenConfigured,
   verifyToken,
 } from '../auth';
 import { SESSION_TTL_MS } from '../auth-session';
@@ -109,11 +110,11 @@ router.get('/status', (req: Request, res: Response) => {
   noStore(res);
   const principal = currentPrincipal(req);
   if (!principal) {
-    res.status(401).json({ configured: tokenConfiguredForStatus(), authenticated: false });
+    res.status(401).json({ configured: tokenConfigured(), authenticated: false });
     return;
   }
   res.json({
-    configured: tokenConfiguredForStatus(),
+    configured: tokenConfigured(),
     authenticated: true,
     actor: principal.actor,
     userId: principal.userId,
@@ -121,10 +122,6 @@ router.get('/status', (req: Request, res: Response) => {
     role: principal.role,
   });
 });
-
-function tokenConfiguredForStatus(): boolean {
-  return Boolean(process.env.ALPHAX_AUTH_TOKEN || true);
-}
 
 router.post('/rotate', (req: Request, res: Response) => {
   noStore(res);
