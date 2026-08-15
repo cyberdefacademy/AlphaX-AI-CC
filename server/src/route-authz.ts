@@ -1,6 +1,17 @@
 import { Request, Response, NextFunction } from 'express';
 import { getSessionPrincipal, parseCookies } from './auth';
-import { audit, hasPermission } from './security';
+import { audit, getDb, hasPermission, initSecuritySchema } from './security';
+
+function ensureRoutePermissions(): void {
+  initSecuritySchema();
+  const db = getDb();
+  const now = new Date().toISOString();
+  db.prepare('INSERT OR IGNORE INTO security_permissions(id,name,created_at) VALUES(?,?,?)').run('missions-read', 'missions.read', now);
+  const roles = db.prepare("SELECT id FROM security_roles WHERE name IN ('security-analyst','pentester','auditor','viewer')").all() as { id: string }[];
+  const permission = db.prepare('SELECT id FROM security_permissions WHERE name=?').get('missions.read') as { id: string };
+  const grant = db.prepare('INSERT OR IGNORE INTO role_permissions(role_id,permission_id) VALUES(?,?)');
+  for (const role of roles) grant.run(role.id, permission.id);
+}
 
 type Method = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
 
@@ -8,12 +19,11 @@ function permissionFor(req: Request): string | null {
   const path = req.path.replace(/\/+$/, '') || '/';
   const method = req.method as Method;
   if (path === '/health' || path === '/auth/login') return null;
-  if (path.startsWith('/auth/')) return null; // auth routes enforce their own user/admin permissions.
-  if (path === '/mcp/execute' || /^\/agents\/[^/]+\/command$/.test(path)) return null; // governed execution gates enforce risk/approval.
+  if (path.startsWith('/auth/')) return null;
+  if (path === '/mcp/execute' || /^\/agents\/[^/]+\/command$/.test(path)) return null;
 
   const [area, action] = path.split('/').filter(Boolean);
   const write = method !== 'GET';
-
   switch (area) {
     case 'system': return write ? 'tools.manage' : 'tools.read';
     case 'security':
@@ -42,28 +52,20 @@ export function csrfGuard(req: Request, res: Response, next: NextFunction): void
   if (req.path === '/auth/login') { next(); return; }
   const origin = req.get('origin');
   const fetchSite = req.get('sec-fetch-site');
-  if (!origin && fetchSite === 'cross-site') {
-    res.status(403).json({ error: 'cross-site request blocked' });
-    return;
-  }
+  if (!origin && fetchSite === 'cross-site') { res.status(403).json({ error: 'cross-site request blocked' }); return; }
   if (origin) {
     const forwardedProto = req.get('x-forwarded-proto');
     const protocol = forwardedProto?.split(',')[0].trim() || req.protocol;
     const expected = `${protocol}://${req.get('host')}`;
     try {
-      if (new URL(origin).origin !== expected) {
-        res.status(403).json({ error: 'invalid request origin' });
-        return;
-      }
-    } catch {
-      res.status(403).json({ error: 'invalid request origin' });
-      return;
-    }
+      if (new URL(origin).origin !== expected) { res.status(403).json({ error: 'invalid request origin' }); return; }
+    } catch { res.status(403).json({ error: 'invalid request origin' }); return; }
   }
   next();
 }
 
 export function authorizeRoute(req: Request, res: Response, next: NextFunction): void {
+  ensureRoutePermissions();
   const permission = permissionFor(req);
   if (!permission) { next(); return; }
   const cookies = parseCookies(req.headers.cookie || '');
