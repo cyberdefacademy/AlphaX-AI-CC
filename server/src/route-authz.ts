@@ -2,7 +2,7 @@ import { Request, Response, NextFunction } from 'express';
 import { getSessionPrincipal, parseCookies } from './auth';
 import { audit, getDb, hasPermission, initSecuritySchema } from './security';
 
-function ensureRoutePermissions(): void {
+export function ensureRoutePermissions(): void {
   initSecuritySchema();
   const db = getDb();
   const now = new Date().toISOString();
