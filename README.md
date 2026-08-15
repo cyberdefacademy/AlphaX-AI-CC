@@ -1,13 +1,24 @@
 # AlphaX Agents OS
 
-A locally-hosted control plane and dashboard for every AI agent installed on your machine.
+A locally-hosted control plane and dashboard for AI agents and authorized security automation.
 
 It discovers, registers, monitors, and controls AI agents (OpenClaw, Hermes Agent, Claude Code,
-opencode, and any generic CLI / Docker agent) from a single browser UI with live task streaming.
+opencode, and generic CLI / Docker agents) from a single browser UI. The security control plane adds
+RBAC, MFA, scope and policy enforcement, human approval gates, governed MCP execution, audit trails,
+mission orchestration, MITRE ATT&CK correlation and evidence tracking.
 
 ![stack](https://img.shields.io/badge/Node-22%2B-green) ![stack](https://img.shields.io/badge/React-18-blue) ![stack](https://img.shields.io/badge/SQLite-Single%20File-orange) ![stack](https://img.shields.io/badge/Bind-127.0.0.1-brightgreen)
 
 ---
+
+## Documentation
+
+- [Architecture](docs/ARCHITECTURE.md) — system boundaries and execution lifecycle
+- [Security Model](docs/SECURITY.md) — threats, controls and incident response
+- [Kali + HexStrike MCP](docs/MCP-KALI-HEXSTRIKE.md) — governed MCP integration design
+- [Operations Runbook](docs/OPERATIONS.md) — installation, operation and recovery
+- [ATT&CK + Evidence](docs/ATTACK-AUDIT.md) — intelligence, findings and provenance
+- [Roadmap](docs/ROADMAP.md) — implementation phases and definition of done
 
 ## Quick start
 
@@ -15,51 +26,32 @@ opencode, and any generic CLI / Docker agent) from a single browser UI with live
 # 1. Install dependencies (Node 22+ required)
 npm install
 
-# 2. Build the backend (TypeScript) and frontend (React/Vite)
+# 2. Build the backend and frontend
 npm run build
 
-# 3. Start the control plane (listens on 127.0.0.1:8455)
+# 3. Start the control plane (default: 127.0.0.1:8455)
 npm start
 ```
 
-On first start you will see the banner with your one-time access token:
+On first start, the service displays its one-time bootstrap access token. Keep it private.
 
-```
-  AlphaX Agents OS is running
-  Dashboard : http://127.0.0.1:8455
-  Access token : ax-...
-```
+### Token recovery / rotation
 
-Open `http://127.0.0.1:8455`, paste the token, and sign in. That's it — the dashboard auto-detects
-all installed agents on the first scan (every 60s).
-
-### Lost / forgot your token?
-
-The token is only ever shown once — it is **not stored** (just a scrypt hash). Two ways to get a new one:
+The bootstrap token is not stored in plaintext. Use the supported rotation workflow if access is lost:
 
 ```bash
-# Option A — rotate in place: keeps agents, activity, and active login sessions.
-# The old token stops working immediately.
 npm start -- --rotate-token
-
-# Option B — full reset: wipes registrations + activity (fresh token on next start).
-rm ~/.alphax-agents-os/data.db
-npm start
 ```
 
-### Other CLI flags
+A full database reset is destructive and should only be performed when a fresh installation is intended.
+
+### Development
 
 ```bash
-npm start                  # run the dashboard (default port 8455)
-npm start -- --rotate-token  # print a new access token and exit
-npm start -- --help          # usage summary
-```
-
-### Rebuilding after edits
-
-```bash
-npm run build        # full rebuild
-npm run typecheck    # type-check server + web
+npm run typecheck
+npm run build
+npm run dev:server
+npm run dev:web
 ```
 
 ---
@@ -68,53 +60,101 @@ npm run typecheck    # type-check server + web
 
 | Capability | Notes |
 |---|---|
-| Agent discovery | Scans PATH, `~/.openclaw`, `~/.hermes`, `~/.claude`, `~/.config/opencode`, systemd user services, and known gateway ports every `DETECT_INTERVAL` (default 60s). Anything new is registered automatically. |
-| Status / health | Installed version, running state, gateway service, model/provider, process list per agent. |
-| Task dispatch | Send a prompt to any agent instance (e.g. `openclaw main`) and watch the output stream live over WebSocket. Results are recorded in `tasks`. |
-| Gateway control | Start / stop / restart an agent's gateway (e.g. `systemctl --user` or `openclaw gateway`). |
-| Deep inspection | Sessions, channels, models, cron jobs, config, and log tails per agent. |
-| Processes | Live process table for each agent (PID, CPU, memory, command). |
-| Cron | Lists each agent's scheduled jobs with next/last run and last status. |
-| Install new agents | From the **Agents** page: one-click install of OpenClaw, Hermes, Claude Code, opencode, plus presets (Codex, Aider, Ollama, Goose, Gemini). |
-| Activity log | Every action (login, detect, install, task) is written to `activity` and streamed to the dashboard. |
+| Agent discovery | Detects supported local agents and gateways on a configurable interval. |
+| Agent control | Start/stop/restart supported gateways and dispatch tasks. |
+| Task execution | Records task lifecycle and streams results over WebSocket. |
+| Security control plane | RBAC, permissions, policy, scope, approvals and emergency stop. |
+| Authentication | Persistent sessions, password hashing, TOTP MFA, revocation and login-abuse controls. |
+| MCP governance | Registered providers/tools, risk gates, scope context and execution receipts. |
+| Mission orchestration | Bounded planning, worker leases, typed handoffs and adaptive feedback. |
+| Intelligence | Result normalization, ATT&CK candidate mapping and finding/evidence correlation. |
+| Audit | Tamper-evident security audit records and mission timelines. |
+| Observability | Prometheus metrics and optional Grafana/Loki stack. |
 
-### Supported adapters
+### Supported agent adapters
 
 | Type | Binary | Gateway | What's controlled |
 |---|---|---|---|
-| `openclaw` | `openclaw` | `openclaw-gateway` (systemd/port 18789) | instances (`main`, others), send, gateway start/stop/restart, sessions, channels, models, cron, config, logs |
-| `hermes` | `hermes` | `hermes-gateway` (systemd) | send, gateway start/stop/restart, sessions, channels, cron, config, logs |
+| `openclaw` | `openclaw` | `openclaw-gateway` | instances, send, gateway, sessions, channels, models, cron, config, logs |
+| `hermes` | `hermes` | `hermes-gateway` | send, gateway, sessions, channels, cron, config, logs |
 | `claude` | `claude` | none | send, config, logs |
 | `opencode` | `opencode` | none | send, config, logs |
-| `generic` | any CLI | none | send, config, logs (declared in agent config) |
+| `generic` | any CLI | none | send, config, logs according to agent configuration |
+
+### Governed MCP providers
+
+AlphaX is designed to place existing security MCP servers behind one authorization and audit boundary.
+Kali MCP and HexStrike AI MCP are provider integrations; they are execution providers, not policy authorities.
+See [Kali + HexStrike MCP](docs/MCP-KALI-HEXSTRIKE.md).
+
+---
+
+## Security architecture
+
+The security boundary follows this model:
+
+```text
+Operator
+  -> Authentication / MFA
+  -> RBAC
+  -> Mission + Scope
+  -> Policy
+  -> Human Approval (when required)
+  -> Task Queue / Worker Lease
+  -> Governed MCP Adapter
+  -> Tool Execution
+  -> Receipt + Audit
+  -> Result / ATT&CK / Evidence
+```
+
+Important rules:
+
+- AI agents propose actions; they do not grant themselves permissions.
+- Tool output is treated as untrusted data.
+- Scope is checked immediately before privileged execution.
+- High-risk actions can require explicit human approval.
+- Unknown or ungoverned routes/tools fail closed.
+- Emergency stop blocks governed execution.
+- Secrets must never be committed to Git.
+
+### Authentication
+
+- Persistent local users and roles: `admin`, `security-analyst`, `pentester`, `auditor`, `viewer`.
+- Scrypt password hashing with per-user salts.
+- Persistent opaque sessions with revocation support.
+- TOTP MFA with encrypted-at-rest secret material.
+- Login failure tracking and temporary lockout.
+- HttpOnly + SameSite cookie protection and state-changing request origin checks.
+
+### Network exposure
+
+The default binding is **127.0.0.1**. Do not expose the dashboard directly to the Internet.
+For remote access, use a properly configured TLS reverse proxy and review the [Security Model](docs/SECURITY.md).
 
 ---
 
 ## Project layout
 
-```
-server/   Express + TypeScript control plane
-  src/adapters/   openclaw · hermes · claude · opencode · generic drivers
-  src/routes/     auth · agents · tasks · activity · system REST endpoints
-  src/            detector · registry · installers · metrics · tasks runner
-  src/            db (SQLite) · auth (token+sessions) · ws (hub) · runner
-web/      React 18 + Vite + Tailwind dashboard (single-page app)
-  src/pages/      Overview · Agents · AgentDetail · Tasks · Activity · Settings
-  src/components/ UI primitives · AgentCard · TaskDock · Icons
+```text
+server/                 Express + TypeScript control plane
+  src/adapters/         OpenClaw, Hermes, Claude, opencode, generic drivers
+  src/routes/           REST API routes
+  src/                  auth, policy, missions, tasks, MCP, audit, intelligence, workers
+web/                    React 18 + Vite + Tailwind dashboard
+docs/                   Architecture, security, MCP, operations, ATT&CK and roadmap
+observability/          Prometheus / Grafana / Loki stack
 ```
 
 ---
 
 ## Configuration
 
-Environment variables (all optional):
-
 | Variable | Default | Purpose |
 |---|---|---|
-| `ALPHAX_HOME` | `~/.alphax-agents-os` | Where `data.db` (SQLite) and state live |
+| `ALPHAX_HOME` | `~/.alphax-agents-os` | SQLite database and local state |
 | `PORT` | `8455` | Dashboard port |
-| `HOST` | `127.0.0.1` | Bind address (keep local-only) |
-| `DETECT_INTERVAL` | `60` | Seconds between auto-rescans |
+| `HOST` | `127.0.0.1` | Bind address; keep local-only by default |
+| `DETECT_INTERVAL` | `60` | Agent discovery interval in seconds |
 
 Example:
 
@@ -124,44 +164,26 @@ PORT=9000 ALPHAX_HOME=/home/me/.alphax-agents-os npm start
 
 ---
 
-## Observability (optional Prometheus + Grafana + Loki stack)
+## Observability
 
-The server exposes a Prometheus `/metrics` endpoint and writes structured JSON logs for log-aggregation.
-A ready-made single-host observability stack (Prometheus, Loki, Grafana, cAdvisor, Node Exporter,
-Alertmanager, Pushgateway) lives in [`observability/`](observability/README.md).
+The server exposes a Prometheus `/metrics` endpoint and structured logs. A single-host Prometheus,
+Loki, Grafana, cAdvisor, Node Exporter, Alertmanager and Pushgateway stack is available under
+[`observability/`](observability/README.md).
 
 ```bash
 cd observability
-cp .env.example .env        # set GRAFANA_ADMIN_PASSWORD first!
+cp .env.example .env
+# set a strong GRAFANA_ADMIN_PASSWORD
 ./obs.sh up
 ```
 
-- Grafana : http://localhost:3000  (dashboards auto-provisioned)
-- Prometheus targets : http://localhost:9090/targets
-- Alertmanager : http://localhost:9093
-
-See [`observability/README.md`](observability/README.md) for full details, dashboards, and alert tuning.
-
 ---
 
-## Security model
+## Responsible use
 
-- Binds to **127.0.0.1** only — not exposed on the network.
-- First-run generates a random access token (printed once, stored only as a scrypt hash).
-- Login issues an **HttpOnly + SameSite=Strict** session cookie (30-day TTL, in-memory).
-- All `/api/*` routes and the `/ws` WebSocket require a valid session cookie.
-- Tokens can be rotated any time from **Settings → Rotate access token**, or from the CLI with
-  `npm start -- --rotate-token` (keeps all data and active sessions).
-- No agent API keys are ever stored by this control plane.
+AlphaX is intended for systems and assets for which the operator has explicit authorization.
+The control plane is deliberately designed to keep scope, approval, audit and evidence boundaries
+around security tooling. Do not use it to access or test systems without permission.
 
----
-
-## Notes & troubleshooting
-
-- **Hermes CLI can be slow to answer** under load (cron jobs / provider rate limits). Every adapter call
-  has a hard timeout, so the dashboard will show partial data rather than hang forever.
-- **Task failures** (e.g. `API rate limit reached`) come from the agent/provider itself — the error text
-  is captured in the task's stderr so you can see exactly what happened.
-- **Data** lives in `~/.alphax-agents-os/data.db`. Delete it to reset registrations and activity
-  (the token is reset too).
-- Requires **Node.js 22+** (uses the built-in `node:sqlite` module).
+See [SECURITY.md](docs/SECURITY.md) and [OPERATIONS.md](docs/OPERATIONS.md) before enabling additional
+MCP providers or network exposure.
