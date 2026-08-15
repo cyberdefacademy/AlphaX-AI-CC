@@ -3,10 +3,12 @@ import { authorizeTool, recordToolCall, type ToolRequest } from './mcp';
 import { requireApprovedApproval, type SecurityContext } from './security';
 import { GovernedMcpAdapter } from './mcp-adapters';
 import { assertExecutionEnabled } from './safety';
+import { assertTargetInScope } from './scope';
 import { beginReceipt,finishReceipt } from './mcp-receipts';
 
 export async function executeGovernedMcp(ctx:SecurityContext,req:ToolRequest,approvalId?:string){
   assertExecutionEnabled();
+  assertTargetInScope(ctx.actor,ctx.projectId,req.target);
   const auth=authorizeTool(ctx,req);
   if(auth.decision==='deny') throw new Error('policy denied tool execution');
   if(auth.approvalRequired){if(!approvalId) return {status:'approval_required',tool:auth.tool.name}; requireApprovedApproval(approvalId,{...ctx,tool:auth.tool.name,target:req.target,risk:auth.tool.risk});}
