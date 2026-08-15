@@ -1,0 +1,1 @@
+import {Router} from 'express';import {missionTimeline,missionSummary} from '../mission-audit';export const router=Router();router.get('/:missionId/timeline',(req,res)=>res.json(missionTimeline(req.params.missionId)));router.get('/:missionId/summary',(req,res)=>res.json(missionSummary(req.params.missionId)));
