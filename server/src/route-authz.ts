@@ -7,11 +7,16 @@ export function ensureRoutePermissions(): void {
   initSecuritySchema();
   const db = getDb();
   const now = new Date().toISOString();
-  db.prepare('INSERT OR IGNORE INTO security_permissions(id,name,created_at) VALUES(?,?,?)').run('missions-read', 'missions.read', now);
-  const roles = db.prepare("SELECT id FROM security_roles WHERE name IN ('security-analyst','pentester','auditor','viewer')").all() as { id: string }[];
-  const permission = db.prepare('SELECT id FROM security_permissions WHERE name=?').get('missions.read') as { id: string };
+  const permissionNames = ['security.read', 'missions.read', 'tools.read', 'audit.read'];
+  for (const name of permissionNames) db.prepare('INSERT OR IGNORE INTO security_permissions(id,name,created_at) VALUES(?,?,?)').run(`route-${name}`, name, now);
+  const roles = db.prepare("SELECT id,name FROM security_roles WHERE name IN ('security-analyst','pentester','auditor','viewer')").all() as { id: string; name: string }[];
+  const permissions = db.prepare('SELECT id,name FROM security_permissions WHERE name IN (?,?,?,?)').all(...permissionNames) as { id: string; name: string }[];
   const grant = db.prepare('INSERT OR IGNORE INTO role_permissions(role_id,permission_id) VALUES(?,?)');
-  for (const role of roles) grant.run(role.id, permission.id);
+  for (const role of roles) {
+    for (const permission of permissions) {
+      if (role.name === 'viewer' || permission.name === 'missions.read') grant.run(role.id, permission.id);
+    }
+  }
 }
 
 type Method = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
