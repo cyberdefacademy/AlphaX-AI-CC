@@ -1,0 +1,4 @@
+import {getDb,nowIso} from './db';
+export function initMissionAuditSchema(){getDb().exec(`CREATE INDEX IF NOT EXISTS idx_audit_resource_time ON audit_log(resource_id,created_at);`)}
+export function missionTimeline(missionId:string){return getDb().prepare(`SELECT id,created_at,actor,event,resource_id,decision,metadata_json FROM audit_log WHERE resource_id=? OR json_extract(metadata_json,'$.missionId')=? ORDER BY created_at ASC`).all(missionId,missionId);}
+export function missionSummary(missionId:string){const db=getDb();return {missionId,generatedAt:nowIso(),events:(db.prepare("SELECT COUNT(*) c FROM audit_log WHERE resource_id=? OR json_extract(metadata_json,'$.missionId')=?").get(missionId,missionId) as any).c,approvals:db.prepare('SELECT status,COUNT(*) c FROM approval_requests WHERE mission_id=? GROUP BY status').all(missionId),correlations:db.prepare('SELECT kind,COUNT(*) c FROM finding_correlations WHERE mission_id=? GROUP BY kind').all(missionId)};}
