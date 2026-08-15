@@ -27,7 +27,7 @@ export function initMcpSchema():void{
     {name:'artifact.metadata',description:'Extract metadata from supplied artifacts',risk:'low',requiredPermission:'tools.execute.low',readOnly:true,server:'local',upstreamName:'artifact.metadata'},
     {name:'report.generate',description:'Generate findings and reports from collected evidence',risk:'low',requiredPermission:'tools.execute.low',readOnly:true,server:'local',upstreamName:'report.generate'},
   ];
-  const s=db.prepare(`INSERT OR IGNORE INTO mcp_servers(id,name,endpoint,kind,created_at,updated_at) VALUES (?,?,?,?,?,?)`);s.run('kali','Kali MCP',process.env.KALI_MCP_ENDPOINT||'http://127.0.0.1:9999','kali',nowIso(),nowIso());s.run('local','Local', 'internal://local','generic',nowIso(),nowIso());
+  const s=db.prepare(`INSERT OR IGNORE INTO mcp_servers(id,name,endpoint,kind,created_at,updated_at) VALUES (?,?,?,?,?,?)`);s.run('kali','Kali MCP',process.env.KALI_MCP_ENDPOINT||'http://127.0.0.1:9999','kali',nowIso(),nowIso());s.run('local','Local','internal://local','generic',nowIso(),nowIso());
   const t=db.prepare(`INSERT OR IGNORE INTO mcp_tools(name,description,risk,required_permission,read_only,server,created_at,upstream_name) VALUES (?,?,?,?,?,?,?,?)`);for(const x of tools)t.run(x.name,x.description,x.risk,x.requiredPermission,x.readOnly?1:0,x.server,nowIso(),x.upstreamName??x.name);
 }
 
@@ -35,14 +35,15 @@ export function listTools():McpTool[]{return getDb().prepare('SELECT name,descri
 
 export function authorizeTool(ctx:SecurityContext,req:ToolRequest):{decision:string;tool:McpTool;approvalRequired:boolean}{
   assertExecutionEnabled();
-  const tool:any=getDb().prepare('SELECT name,description,risk,required_permission as requiredPermission,read_only as readOnly,server,input_schema as inputSchema,output_schema as outputSchema,requires_target as requiresTarget,upstream_name as upstreamName FROM mcp_tools WHERE name=? AND enabled=1').get(req.tool);
-  if(!tool)throw new Error('tool not registered');
+  const row:any=getDb().prepare('SELECT name,description,risk,required_permission as requiredPermission,read_only as readOnly,server,input_schema as inputSchema,output_schema as outputSchema,requires_target as requiresTarget,upstream_name as upstreamName FROM mcp_tools WHERE name=? AND enabled=1').get(req.tool);
+  if(!row)throw new Error('tool not registered');
+  const tool:McpTool={name:row.name,description:row.description,risk:row.risk,requiredPermission:row.requiredPermission,readOnly:Boolean(row.readOnly),server:row.server,inputSchema:row.inputSchema?JSON.parse(row.inputSchema):undefined,outputSchema:row.outputSchema?JSON.parse(row.outputSchema):undefined,requiresTarget:Boolean(row.requiresTarget),upstreamName:row.upstreamName??row.name};
   requirePermission(ctx,tool.requiredPermission);
   if(tool.requiresTarget && !req.target) throw new Error('target is required for this tool');
   assertTargetInScope(ctx.actor,ctx.projectId,req.target);
   const decision=riskDecision({...ctx,tool:tool.name,target:req.target,risk:tool.risk});
   audit(ctx.actor,'mcp.tool.authorization',tool.name,decision,{target:req.target,risk:tool.risk,missionId:req.missionId,taskId:req.taskId,agentId:req.agentId});
-  return {...tool,readOnly:Boolean(tool.readOnly),requiresTarget:Boolean(tool.requiresTarget),inputSchema:tool.inputSchema?JSON.parse(tool.inputSchema):undefined,outputSchema:tool.outputSchema?JSON.parse(tool.outputSchema):undefined,upstreamName:tool.upstreamName??tool.name,decision,tool,approvalRequired:decision==='approval_required'} as any;
+  return {decision,tool,approvalRequired:decision==='approval_required'};
 }
 
 export function recordToolCall(ctx:SecurityContext,req:ToolRequest,decision:string,approvalId?:string):string{const id=randomId();getDb().prepare('INSERT INTO mcp_tool_calls(id,actor,tool,target,request,decision,approval_id,created_at) VALUES (?,?,?,?,?,?,?,?)').run(id,ctx.actor,req.tool,req.target??null,JSON.stringify({arguments:req.arguments??{},missionId:req.missionId??null,taskId:req.taskId??null,agentId:req.agentId??null}),decision,approvalId??null,nowIso());audit(ctx.actor,'mcp.tool.call',req.tool,decision,{target:req.target,approvalId,missionId:req.missionId,taskId:req.taskId,agentId:req.agentId});return id;}
