@@ -1,10 +1,128 @@
+import { createHash } from 'node:crypto';
 import { getDb, nowIso, randomId } from './db';
 import { audit, type SecurityContext } from './security';
+import { addEvidence } from './evidence';
+import { createFinding } from './findings';
+import { candidateTechniques, mapFinding } from './mitre';
+import { correlate } from './correlation';
 
-export interface NormalizedResult { taskId:string; missionId:string; provider:string; tool:string; ok:boolean; summary:string; observations:string[]; evidence:string[]; findings:string[]; attackTechniques:string[]; confidence:number; raw?:unknown; }
-export interface IntelligenceDecision { findingIds:string[]; evidenceIds:string[]; attackTechniques:string[]; confidence:number; }
+export interface NormalizedResult {
+  taskId: string;
+  missionId: string;
+  provider: string;
+  tool: string;
+  ok: boolean;
+  summary?: string;
+  observations?: string[];
+  evidence?: string[];
+  findings?: string[];
+  attackTechniques?: string[];
+  confidence?: number;
+  raw?: unknown;
+}
 
-export function initResultIntelligenceSchema(){getDb().exec(`CREATE TABLE IF NOT EXISTS normalized_results(id TEXT PRIMARY KEY,task_id TEXT NOT NULL,mission_id TEXT NOT NULL,provider TEXT NOT NULL,tool TEXT NOT NULL,ok INTEGER NOT NULL,summary TEXT NOT NULL DEFAULT '',observations_json TEXT NOT NULL DEFAULT '[]',evidence_json TEXT NOT NULL DEFAULT '[]',findings_json TEXT NOT NULL DEFAULT '[]',attack_json TEXT NOT NULL DEFAULT '[]',confidence REAL NOT NULL DEFAULT 0,raw_json TEXT,created_at TEXT NOT NULL); CREATE INDEX IF NOT EXISTS idx_normalized_task ON normalized_results(task_id);`)}
+export interface IntelligenceDecision {
+  resultId: string;
+  findingIds: string[];
+  evidenceIds: string[];
+  attackTechniques: string[];
+  confidence: number;
+  deduplicated: boolean;
+}
 
-function clamp(n:number){return Math.max(0,Math.min(1,n));}
-export function normalizeResult(ctx:SecurityContext,input:NormalizedResult):IntelligenceDecision{const confidence=clamp(Number(input.confidence)||0);const id=randomId();getDb().prepare(`INSERT INTO normalized_results(id,task_id,mission_id,provider,tool,ok,summary,observations_json,evidence_json,findings_json,attack_json,confidence,raw_json,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).run(id,input.taskId,input.missionId,input.provider,input.tool,input.ok?1:0,input.summary,JSON.stringify(input.observations??[]),JSON.stringify(input.evidence??[]),JSON.stringify(input.findings??[]),JSON.stringify(input.attackTechniques??[]),confidence,input.raw===undefined?null:JSON.stringify(input.raw),nowIso());const evidenceIds=(input.evidence??[]).map(()=>randomId());const findingIds=(input.findings??[]).map(()=>randomId());audit(ctx.actor,'result.normalized',input.taskId,'allow',{provider:input.provider,tool:input.tool,confidence,findings:findingIds.length,evidence:evidenceIds.length,attackTechniques:input.attackTechniques??[]});return {findingIds,evidenceIds,attackTechniques:input.attackTechniques??[],confidence};}
+const clamp = (n: number) => Math.max(0, Math.min(1, n));
+const text = (input: NormalizedResult) => [
+  input.provider,
+  input.tool,
+  input.summary ?? '',
+  ...(input.observations ?? []),
+  ...(input.evidence ?? []),
+  ...(input.findings ?? []),
+  typeof input.raw === 'string' ? input.raw : JSON.stringify(input.raw ?? ''),
+].join('\n').trim();
+
+function fingerprint(input: NormalizedResult): string {
+  return createHash('sha256').update(text(input).toLowerCase().replace(/\s+/g, ' ')).digest('hex');
+}
+
+export function initResultIntelligenceSchema(): void {
+  const db = getDb();
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS normalized_results(
+      id TEXT PRIMARY KEY, task_id TEXT NOT NULL, mission_id TEXT NOT NULL,
+      provider TEXT NOT NULL, tool TEXT NOT NULL, ok INTEGER NOT NULL,
+      summary TEXT NOT NULL DEFAULT '', observations_json TEXT NOT NULL DEFAULT '[]',
+      evidence_json TEXT NOT NULL DEFAULT '[]', findings_json TEXT NOT NULL DEFAULT '[]',
+      attack_json TEXT NOT NULL DEFAULT '[]', confidence REAL NOT NULL DEFAULT 0,
+      raw_json TEXT, created_at TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_normalized_task ON normalized_results(task_id);
+    CREATE INDEX IF NOT EXISTS idx_normalized_mission ON normalized_results(mission_id);
+  `);
+  const columns = db.prepare('PRAGMA table_info(normalized_results)').all() as unknown as { name: string }[];
+  if (!columns.some((c) => c.name === 'fingerprint')) db.exec('ALTER TABLE normalized_results ADD COLUMN fingerprint TEXT');
+  if (!columns.some((c) => c.name === 'review_state')) db.exec("ALTER TABLE normalized_results ADD COLUMN review_state TEXT NOT NULL DEFAULT 'processed'");
+  db.exec('CREATE INDEX IF NOT EXISTS idx_normalized_fingerprint ON normalized_results(mission_id,fingerprint)');
+}
+
+function confidenceFor(input: NormalizedResult, techniqueCount: number, evidenceCount: number): number {
+  const base = clamp(Number(input.confidence) || 0);
+  const success = input.ok ? 0.1 : 0;
+  const evidenceBoost = Math.min(0.15, evidenceCount * 0.05);
+  const techniqueBoost = Math.min(0.1, techniqueCount * 0.025);
+  return clamp(base + success + evidenceBoost + techniqueBoost);
+}
+
+export function normalizeResult(ctx: SecurityContext, input: NormalizedResult): IntelligenceDecision {
+  if (!input.taskId || !input.missionId || !input.provider || !input.tool) throw new Error('taskId, missionId, provider and tool are required');
+  const db = getDb();
+  const fp = fingerprint(input);
+  const existing = db.prepare('SELECT id FROM normalized_results WHERE mission_id=? AND fingerprint=? LIMIT 1').get(input.missionId, fp) as { id: string } | undefined;
+  if (existing) {
+    audit(ctx.actor, 'result.deduplicated', existing.id, 'allow', { missionId: input.missionId, taskId: input.taskId, fingerprint: fp });
+    return { resultId: existing.id, findingIds: [], evidenceIds: [], attackTechniques: input.attackTechniques ?? [], confidence: clamp(Number(input.confidence) || 0), deduplicated: true };
+  }
+
+  const resultId = randomId();
+  const observations = (input.observations ?? []).filter((x) => typeof x === 'string' && x.trim()).slice(0, 100);
+  const suppliedEvidence = (input.evidence ?? []).filter((x) => typeof x === 'string' && x.trim()).slice(0, 50);
+  const suppliedFindings = (input.findings ?? []).filter((x) => typeof x === 'string' && x.trim()).slice(0, 50);
+  const candidates = candidateTechniques({ provider: input.provider, tool: input.tool, text: text({ ...input, observations, evidence: suppliedEvidence, findings: suppliedFindings }) });
+  const attackTechniques = [...new Set([...(input.attackTechniques ?? []), ...candidates.map((x) => x.id)])];
+  const confidence = confidenceFor(input, attackTechniques.length, suppliedEvidence.length + observations.length);
+
+  db.prepare(`INSERT INTO normalized_results(id,task_id,mission_id,provider,tool,ok,summary,observations_json,evidence_json,findings_json,attack_json,confidence,raw_json,created_at,fingerprint,review_state) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
+    .run(resultId, input.taskId, input.missionId, input.provider, input.tool, input.ok ? 1 : 0, input.summary ?? '', JSON.stringify(observations), JSON.stringify(suppliedEvidence), JSON.stringify(suppliedFindings), JSON.stringify(attackTechniques), confidence, input.raw === undefined ? null : JSON.stringify(input.raw), nowIso(), fp, 'processed');
+
+  const evidenceIds = [...suppliedEvidence, ...observations].slice(0, 50).map((content, i) => addEvidence(ctx.actor, {
+    missionId: input.missionId,
+    taskId: input.taskId,
+    kind: 'mcp-result',
+    name: `${input.provider}:${input.tool}:observation-${i + 1}`,
+    content,
+    metadata: { resultId, provider: input.provider, tool: input.tool },
+  }));
+
+  const findingIds = suppliedFindings.map((description) => createFinding(ctx.actor, {
+    missionId: input.missionId,
+    taskId: input.taskId,
+    title: `${input.provider}:${input.tool} finding`,
+    description,
+    severity: input.ok ? 'medium' : 'info',
+    confidence,
+    evidenceId: evidenceIds[0],
+    fingerprint: createHash('sha256').update(`${input.missionId}|${description}`.toLowerCase().replace(/\s+/g, ' ')).digest('hex'),
+    sourceResultId: resultId,
+  }));
+
+  for (const id of findingIds) for (const candidate of candidates) mapFinding(id, candidate.id, candidate.confidence, ctx.actor);
+  correlate(ctx, { taskId: input.taskId, missionId: input.missionId, evidence: evidenceIds, findings: suppliedFindings, attackTechniques, confidence });
+  audit(ctx.actor, 'result.intelligence.processed', resultId, 'allow', { missionId: input.missionId, taskId: input.taskId, provider: input.provider, tool: input.tool, findings: findingIds.length, evidence: evidenceIds.length, attackTechniques, confidence });
+  return { resultId, findingIds, evidenceIds, attackTechniques, confidence, deduplicated: false };
+}
+
+export function listNormalizedResults(missionId?: string): unknown[] {
+  const db = getDb();
+  const rows = missionId ? db.prepare('SELECT * FROM normalized_results WHERE mission_id=? ORDER BY created_at DESC').all(missionId) : db.prepare('SELECT * FROM normalized_results ORDER BY created_at DESC LIMIT 200').all();
+  return rows;
+}
