@@ -41,6 +41,9 @@ Status: **complete / merged to main**
 - [x] request cancellation and timeout propagation
 - [x] provider-qualified tool identities to avoid cross-provider name collisions
 - [x] safe integration validation procedure
+- [x] environment-scoped provider authentication
+- [x] loopback-by-default and remote host allowlisting
+- [x] offline MCP self-test in CI
 
 ## Phase 4 — Intelligence
 
@@ -74,6 +77,8 @@ Status: **in progress**
 - [ ] emergency-stop API and confirmation workflow
 
 ## Phase 6 — Production hardening
+
+Status: **planned**
 
 - TLS deployment profile
 - secret management integration
