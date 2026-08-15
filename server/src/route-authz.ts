@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { getSessionPrincipal, parseCookies } from './auth';
-import { audit, getDb, hasPermission, initSecuritySchema } from './security';
+import { getDb } from './db';
+import { audit, hasPermission, initSecuritySchema } from './security';
 
 export function ensureRoutePermissions(): void {
   initSecuritySchema();
