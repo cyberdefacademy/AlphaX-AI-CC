@@ -9,7 +9,8 @@
     "build": "tsc -p tsconfig.json",
     "start": "node --no-warnings dist/index.js",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test:security": "tsx src/security-regression.ts"
+    "test:security": "tsx src/security-regression.ts",
+    "test:mcp": "tsx src/mcp-provider-selftest.ts"
   },
   "dependencies": {
     "express": "^4.19.2",

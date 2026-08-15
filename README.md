@@ -15,6 +15,7 @@ It discovers, registers, monitors, and controls AI agents (OpenClaw, Hermes Agen
 - [Security Model](docs/SECURITY.md) — threats, controls and incident response
 - [Threat Model](docs/THREAT-MODEL.md) — AI/MCP trust boundaries and attack scenarios
 - [Kali + HexStrike MCP](docs/MCP-KALI-HEXSTRIKE.md) — governed MCP integration design
+- [Phase 3 MCP Implementation](docs/PHASE-3-MCP.md) — dynamic provider discovery, health, schemas, normalization and safe validation
 - [Operations Runbook](docs/OPERATIONS.md) — installation, operation and recovery
 - [ATT&CK + Evidence](docs/ATTACK-AUDIT.md) — intelligence, findings and provenance
 - [Roadmap](docs/ROADMAP.md) — implementation phases and definition of done
@@ -55,7 +56,7 @@ npm run dev:web
 | Task execution | Records task lifecycle and streams results over WebSocket. |
 | Security control plane | RBAC, permissions, policy, scope, approvals and emergency stop. |
 | Authentication | Persistent sessions, password hashing, TOTP MFA, revocation and login-abuse controls. |
-| MCP governance | Registered providers/tools, risk gates, scope context and execution receipts. |
+| MCP governance | Registered providers/tools, dynamic discovery, schema validation, risk gates, scope context and execution receipts. |
 | Mission orchestration | Bounded planning, worker leases, typed handoffs and adaptive feedback. |
 | Intelligence | Result normalization, ATT&CK candidate mapping and finding/evidence correlation. |
 | Audit | Tamper-evident security audit records and mission timelines. |
@@ -73,7 +74,7 @@ npm run dev:web
 
 ### Governed MCP providers
 
-AlphaX places existing security MCP servers behind one authorization and audit boundary. Kali MCP and HexStrike AI MCP are execution providers, not policy authorities. See [Kali + HexStrike MCP](docs/MCP-KALI-HEXSTRIKE.md).
+AlphaX places existing security MCP servers behind one authorization and audit boundary. Kali MCP and HexStrike AI MCP are execution providers, not policy authorities. Their tool inventories are discovered at runtime and registered with provider-qualified names; see [Phase 3 MCP Implementation](docs/PHASE-3-MCP.md).
 
 ## Security architecture
 
@@ -134,12 +135,18 @@ observability/          Prometheus / Grafana / Loki stack
 | `PORT` | `8455` | Dashboard port |
 | `HOST` | `127.0.0.1` | Bind address; keep local-only by default |
 | `DETECT_INTERVAL` | `60` | Agent discovery interval in seconds |
+| `ALPHAX_KALI_MCP_URL` | `http://127.0.0.1:9999` | Kali MCP endpoint |
+| `ALPHAX_HEXSTRIKE_MCP_URL` | unset | Optional HexStrike MCP endpoint |
+| `ALPHAX_MCP_ALLOWED_HOSTS` | loopback hosts | Explicit MCP remote-host allowlist |
+| `ALPHAX_MCP_TIMEOUT_MS` | `30000` | Governed MCP request timeout |
 
 Example:
 
 ```bash
 PORT=9000 ALPHAX_HOME=/home/me/.alphax-agents-os npm start
 ```
+
+See `docs/PHASE-3-MCP.md` for provider authentication and remote endpoint configuration.
 
 ## Observability
 

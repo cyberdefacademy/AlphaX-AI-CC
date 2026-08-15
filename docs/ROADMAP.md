@@ -18,7 +18,7 @@ Status: **complete / merged to main**
 
 ## Phase 2 — Operational orchestration
 
-Status: **next**
+Status: **complete / merged to main**
 
 - persistent task queue with priorities
 - worker leases and retries
@@ -30,13 +30,17 @@ Status: **next**
 
 ## Phase 3 — MCP provider adapters
 
-- Kali MCP adapter
-- HexStrike MCP adapter
-- provider health monitoring
-- dynamic capability inventory
-- schema validation
-- provider-specific result normalizers
-- safe integration test harness
+Status: **implementation complete / validation pending**
+
+- [x] Kali MCP adapter
+- [x] HexStrike MCP adapter
+- [x] provider health monitoring
+- [x] dynamic capability inventory
+- [x] schema-aware tool registration and bounded input validation
+- [x] provider-specific result normalization
+- [x] request cancellation and timeout propagation
+- [x] provider-qualified tool identities to avoid cross-provider name collisions
+- [x] safe integration validation procedure
 
 ## Phase 4 — Intelligence
 
