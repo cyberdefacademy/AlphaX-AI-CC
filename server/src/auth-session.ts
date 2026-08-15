@@ -3,7 +3,8 @@ import { getDb, nowIso, randomId } from './db';
 
 export const SESSION_TTL_MS = 1000 * 60 * 60 * 24 * 30;
 
-export type SessionRole = 'admin' | 'operator' | 'reviewer' | 'viewer';
+// Keep session roles aligned with the control-plane RBAC roles in security.ts.
+export type SessionRole = 'admin' | 'security-analyst' | 'pentester' | 'auditor' | 'viewer';
 
 export interface SessionPrincipal {
   actor: string;
@@ -16,6 +17,10 @@ function hashSessionToken(raw: string): string {
 
 function actorForSession(id: string): string {
   return `session:${id.slice(0, 16)}`;
+}
+
+function isSessionRole(role: string): role is SessionRole {
+  return ['admin', 'security-analyst', 'pentester', 'auditor', 'viewer'].includes(role);
 }
 
 export function initSessionSchema(): void {
@@ -63,10 +68,9 @@ export function getPersistentSession(raw: string): SessionPrincipal | null {
     getDb().prepare('DELETE FROM auth_sessions WHERE id=?').run(row.id);
     return null;
   }
-  const role = row.role as SessionRole;
-  if (!['admin','operator','reviewer','viewer'].includes(role)) return null;
+  if (!isSessionRole(row.role)) return null;
   getDb().prepare('UPDATE auth_sessions SET last_seen_at=? WHERE id=?').run(nowIso(), row.id);
-  return { actor: actorForSession(row.id), role };
+  return { actor: actorForSession(row.id), role: row.role };
 }
 
 export function destroyPersistentSession(raw: string): void {
