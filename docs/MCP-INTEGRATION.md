@@ -62,12 +62,21 @@ AlphaX should not automatically import or execute arbitrary tools from a newly d
 6. The global execution stop must block external tool execution.
 7. Every invocation and result must be auditable.
 8. Provider-specific protocol details must be implemented only after confirming the provider's actual transport contract; AlphaX does not assume that a local endpoint is necessarily standard JSON-RPC-over-HTTP.
+9. MCP endpoints are host-allowlisted. By default only loopback hosts are permitted; remote endpoints require `ALPHAX_MCP_ALLOWED_HOSTS` and HTTPS.
+10. Remote MCP credentials are supplied only through deployment secrets and are never stored in the MCP registry.
+11. HTTP redirects are rejected to prevent an allowlisted endpoint from redirecting requests to another host.
+12. Responses are size-limited and must be valid JSON-RPC 2.0 responses.
 
-## Suggested environment contract
+## Environment contract
 
 ```text
 ALPHAX_KALI_MCP_URL=
 ALPHAX_HEXSTRIKE_MCP_URL=
+ALPHAX_KALI_MCP_TOKEN=
+ALPHAX_HEXSTRIKE_MCP_TOKEN=
+ALPHAX_GENERIC_MCP_TOKEN=
+ALPHAX_MCP_ALLOWED_HOSTS=localhost,127.0.0.1,::1
+ALPHAX_MCP_TIMEOUT_MS=30000
 ```
 
-Add provider authentication through the deployment secret store rather than source-controlled configuration.
+For remote providers, replace the default host allowlist with the exact provider hostnames or IP addresses required by the deployment. Never use a broad wildcard allowlist.
