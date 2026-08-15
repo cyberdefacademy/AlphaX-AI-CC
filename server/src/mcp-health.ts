@@ -26,4 +26,4 @@ export async function checkProviderHealth(ctx: SecurityContext, provider: McpPro
   }
 }
 
-function saveHealth(health: ProviderHealth): void { getDb().prepare(`INSERT INTO mcp_provider_health(provider_id,status,last_checked_at,latency_ms,tool_count,error) VALUES(?,?,?,?,?,?) ON CONFLICT(provider_id) DO UPDATE SET status=excluded.status,last_checked_at=excluded.last_checked_at,latency_ms=excluded.latencyMs,tool_count=excluded.toolCount,error=excluded.error`).run(health.providerId, health.status, health.lastCheckedAt, health.latencyMs, health.toolCount, health.error); }
+function saveHealth(health: ProviderHealth): void { getDb().prepare(`INSERT INTO mcp_provider_health(provider_id,status,last_checked_at,latency_ms,tool_count,error) VALUES(?,?,?,?,?,?) ON CONFLICT(provider_id) DO UPDATE SET status=excluded.status,last_checked_at=excluded.last_checked_at,latency_ms=excluded.latency_ms,tool_count=excluded.tool_count,error=excluded.error`).run(health.providerId, health.status, health.lastCheckedAt, health.latencyMs, health.toolCount, health.error); }
