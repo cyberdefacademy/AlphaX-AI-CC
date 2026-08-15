@@ -30,7 +30,7 @@ Status: **complete / merged to main**
 
 ## Phase 3 — MCP provider adapters
 
-Status: **implementation complete / validation pending**
+Status: **complete / merged to main**
 
 - [x] Kali MCP adapter
 - [x] HexStrike MCP adapter
@@ -44,13 +44,17 @@ Status: **implementation complete / validation pending**
 
 ## Phase 4 — Intelligence
 
-- result normalization
-- ATT&CK candidate mapper
-- evidence extraction
-- finding correlation
-- deduplication
-- confidence scoring
-- analyst review workflow
+Status: **implementation complete / validation pending**
+
+- [x] deterministic result normalization and persistence
+- [x] bounded ATT&CK candidate mapper
+- [x] evidence extraction with SHA-256 content hashes and custody records
+- [x] finding correlation and persisted entity links
+- [x] mission-scoped result/finding deduplication
+- [x] bounded confidence scoring
+- [x] analyst finding review workflow
+- [x] intelligence read/review API
+- [x] regression test suite with synthetic, offline data
 
 ## Phase 5 — Operator experience
 
