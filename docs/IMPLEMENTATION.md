@@ -15,6 +15,39 @@ Mission -> Scope -> Planner -> Policy/Risk -> Human Approval (if required)
 
 Planning is never execution authority. A planned task must remain inside the mission project, target scope, policy budget and approval state.
 
+## Phase 2 — Durable orchestration
+
+The task queue is persistent SQLite state rather than an in-memory work list. Tasks support:
+
+- priority ordering (0–100)
+- dependency gating
+- approval-aware claiming
+- worker ownership
+- renewable leases
+- heartbeat timestamps
+- attempt counters and retry limits
+- expired-lease recovery
+- worker-owned state transitions
+- live WebSocket lifecycle events
+
+The worker uses a unique process-local worker ID. It claims work through an atomic `queued -> leased` transition, renews its lease while running, and cannot complete a task after its ownership has been lost. Expired leases are returned to `queued` until the retry limit is reached, after which the task is failed and audited.
+
+### Phase 2 lifecycle
+
+```text
+created -> policy decision
+          |-> denied
+          |-> waiting_approval -> approved
+          `-> queued
+               -> leased -> running -> completed
+                              |-> failed
+                              `-> cancelled
+               ^
+               | expired lease + retries remaining
+```
+
+Dependencies are enforced server-side: a queued task cannot be claimed while any dependency is not `completed`.
+
 ## Kali + HexStrike MCP
 
 Kali MCP and HexStrike AI MCP are execution providers behind AlphaX's authorization and audit boundary. They do not define AlphaX policy.
@@ -31,16 +64,6 @@ A provider registration should contain a stable provider ID, transport, endpoint
 6. Test against an explicitly authorized target/scope.
 7. Verify execution receipts and audit events.
 8. Verify the emergency stop blocks governed execution.
-
-## Task queue
-
-Recommended task state machine:
-
-`queued -> leased -> running -> succeeded | failed | cancelled | expired`
-
-A durable task should retain task ID, mission/project/scope IDs, requested tool/capability, risk, approval state, priority, worker/agent ID, lease expiry, attempts, timestamps, correlation ID and result/receipt references.
-
-Workers use leases so crashed workers cannot permanently own work. Expired leases return work according to retry policy.
 
 ## Human approval
 
@@ -115,10 +138,12 @@ Before enabling a new provider or execution capability:
 4. Test denied permissions.
 5. Test out-of-scope execution.
 6. Test approval-required execution.
-7. Test emergency stop.
-8. Test worker lease expiry/retry.
-9. Test receipt/audit generation.
-10. Test result normalization and ATT&CK correlation.
+7. Test dependency ordering.
+8. Test worker lease acquisition.
+9. Test heartbeat and lease expiry/recovery.
+10. Test retry exhaustion.
+11. Test receipt/audit generation.
+12. Test result normalization and ATT&CK correlation.
 
 ## Production principles
 
