@@ -27,3 +27,5 @@ jobs:
         run: npm run typecheck
       - name: Build
         run: npm run build
+      - name: MCP provider self-test
+        run: npm run test:mcp --workspace server
