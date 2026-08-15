@@ -8,14 +8,16 @@ process.env.ALPHAX_HOME = home;
 
 const { getDb } = await import('./db');
 const { initSecuritySchema, hasPermission, requirePermission } = await import('./security');
+const { ensureRoutePermissions } = await import('./route-authz');
 const { createUser, getUserByUsername } = await import('./auth-users');
 const { clearLoginFailures, loginBlocked, loginKey, recordLoginFailure } = await import('./auth-abuse');
 
 initSecuritySchema();
+ensureRoutePermissions();
 
 // Role matrix: least-privilege reads are available, but execution remains restricted.
 assert.equal(hasPermission('viewer', 'security.read'), true);
-assert.equal(hasPermission('viewer', 'missions.read'), false, 'viewer must not gain mission read until explicitly assigned');
+assert.equal(hasPermission('viewer', 'missions.read'), true);
 assert.equal(hasPermission('pentester', 'missions.execute'), true);
 assert.equal(hasPermission('security-analyst', 'missions.execute'), false);
 assert.equal(hasPermission('security-analyst', 'audit.read'), true);
