@@ -2,11 +2,11 @@
 
 ## Status
 
-This document is the production-readiness baseline for the Phase 6 hardening work. It distinguishes controls already enforced by the application from deployment controls that must be supplied by the operator/platform.
+This document is the production-readiness baseline for Phase 6. It distinguishes controls enforced by the application from deployment controls supplied by the operator/platform.
 
 ## 1. Network boundary
 
-The application defaults to loopback (`127.0.0.1`). Keep that default for a single-host deployment whenever possible. The current server starts from the configured host/port and initializes the control plane, worker and governed providers from the same process. fileciteturn768file0L2-L6
+The application defaults to loopback (`127.0.0.1`). Keep that default for a single-host deployment whenever possible.
 
 For remote access:
 
@@ -23,7 +23,7 @@ Do not expose Kali MCP or HexStrike MCP directly to the public Internet.
 
 Never commit passwords, access tokens, MCP credentials, TOTP secrets or private keys.
 
-Use deployment secret storage or environment injection. The application already supports configured MCP endpoints through environment variables, including `ALPHAX_KALI_MCP_URL` and `ALPHAX_HEXSTRIKE_MCP_URL`. fileciteturn769file0L2-L6
+Use deployment secret storage or environment injection. Configured MCP endpoints are supplied through `ALPHAX_KALI_MCP_URL` and `ALPHAX_HEXSTRIKE_MCP_URL`.
 
 Recommended production practice:
 
@@ -36,7 +36,7 @@ Recommended production practice:
 
 ## 3. Authentication
 
-The login endpoint already applies persistent authentication-abuse tracking and temporary lockout. fileciteturn771file0L2-L6
+The login endpoint applies persistent authentication-abuse tracking and temporary lockout.
 
 Production requirements:
 
@@ -49,7 +49,7 @@ Production requirements:
 
 ## 4. Authorization
 
-Keep the server-side route authorization and fail-closed model enabled. Never rely on React/UI visibility as a permission boundary.
+Keep server-side route authorization and the fail-closed model enabled. Never rely on React/UI visibility as a permission boundary.
 
 Privileged actions must be authorized again at the execution boundary. This includes mission execution, MCP tool invocation, agent commands, approvals and safety-state changes.
 
@@ -68,7 +68,7 @@ Do not treat loss of the dashboard connection as equivalent to emergency stop.
 
 ## 6. Database and backups
 
-The default data directory is `~/.alphax-agents-os`, or `ALPHAX_HOME` when configured. fileciteturn769file0L2-L6
+The default data directory is `~/.alphax-agents-os`, or `ALPHAX_HOME` when configured.
 
 Back up the complete application state, including:
 
@@ -121,8 +121,6 @@ Monitor at minimum:
 - evidence ingestion failures;
 - database/storage errors;
 - process restarts.
-
-The application already initializes structured logging and Prometheus metrics during startup. fileciteturn768file0L2-L6
 
 Alerting should be configured outside the application so a compromised application cannot silently disable all monitoring.
 
