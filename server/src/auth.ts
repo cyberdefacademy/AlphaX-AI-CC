@@ -5,11 +5,19 @@ import {
   destroyPersistentSession,
   getPersistentSession,
   purgeExpiredSessions,
+  revokeUserSessions,
   type SessionPrincipal,
   type SessionRole,
 } from './auth-session';
+import {
+  authenticateUser,
+  ensureBootstrapAdmin,
+  getUserById,
+  type AuthUser,
+} from './auth-users';
 
 export type { SessionRole } from './auth-session';
+export type { AuthUser } from './auth-users';
 
 export function tokenConfigured(): boolean { return Boolean(getSetting('auth.token_hash')); }
 
@@ -31,9 +39,21 @@ export function verifyToken(raw: string): boolean {
   return derived.length === expected.length && timingSafeEqual(derived, expected);
 }
 
-export function createSession(role: SessionRole = 'admin'): string {
+export function createUserSession(user: AuthUser): string {
   purgeExpiredSessions();
-  return createPersistentSession(role);
+  return createPersistentSession(user.id, user.role);
+}
+
+export function authenticatePassword(username: string, password: string): AuthUser | null {
+  return authenticateUser(username, password);
+}
+
+export function bootstrapTokenUser(): AuthUser {
+  return ensureBootstrapAdmin();
+}
+
+export function getUser(id: string): AuthUser | null {
+  return getUserById(id);
 }
 
 export function getSessionPrincipal(id: string): SessionPrincipal | null {
@@ -46,6 +66,10 @@ export function validSession(id: string): boolean {
 
 export function destroySession(id: string): void {
   destroyPersistentSession(id);
+}
+
+export function revokeSessionsForUser(id: string): void {
+  revokeUserSessions(id);
 }
 
 export function parseCookies(header: string): Record<string, string> {
