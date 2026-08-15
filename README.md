@@ -2,10 +2,7 @@
 
 A locally-hosted control plane and dashboard for AI agents and authorized security automation.
 
-It discovers, registers, monitors, and controls AI agents (OpenClaw, Hermes Agent, Claude Code,
-opencode, and generic CLI / Docker agents) from a single browser UI. The security control plane adds
-RBAC, MFA, scope and policy enforcement, human approval gates, governed MCP execution, audit trails,
-mission orchestration, MITRE ATT&CK correlation and evidence tracking.
+It discovers, registers, monitors, and controls AI agents (OpenClaw, Hermes Agent, Claude Code, opencode, and generic CLI / Docker agents) from a single browser UI. The security control plane adds RBAC, MFA, scope and policy enforcement, human approval gates, governed MCP execution, audit trails, mission orchestration, MITRE ATT&CK correlation and evidence tracking.
 
 ![stack](https://img.shields.io/badge/Node-22%2B-green) ![stack](https://img.shields.io/badge/React-18-blue) ![stack](https://img.shields.io/badge/SQLite-Single%20File-orange) ![stack](https://img.shields.io/badge/Bind-127.0.0.1-brightgreen)
 
@@ -14,7 +11,9 @@ mission orchestration, MITRE ATT&CK correlation and evidence tracking.
 ## Documentation
 
 - [Architecture](docs/ARCHITECTURE.md) — system boundaries and execution lifecycle
+- [Implementation Guide](docs/IMPLEMENTATION.md) — orchestration, task queue, MCP, approvals and integration definition of done
 - [Security Model](docs/SECURITY.md) — threats, controls and incident response
+- [Threat Model](docs/THREAT-MODEL.md) — AI/MCP trust boundaries and attack scenarios
 - [Kali + HexStrike MCP](docs/MCP-KALI-HEXSTRIKE.md) — governed MCP integration design
 - [Operations Runbook](docs/OPERATIONS.md) — installation, operation and recovery
 - [ATT&CK + Evidence](docs/ATTACK-AUDIT.md) — intelligence, findings and provenance
@@ -23,21 +22,14 @@ mission orchestration, MITRE ATT&CK correlation and evidence tracking.
 ## Quick start
 
 ```bash
-# 1. Install dependencies (Node 22+ required)
 npm install
-
-# 2. Build the backend and frontend
 npm run build
-
-# 3. Start the control plane (default: 127.0.0.1:8455)
 npm start
 ```
 
-On first start, the service displays its one-time bootstrap access token. Keep it private.
+Default control-plane listener: `127.0.0.1:8455`.
 
-### Token recovery / rotation
-
-The bootstrap token is not stored in plaintext. Use the supported rotation workflow if access is lost:
+On first start, the service displays its one-time bootstrap access token. Keep it private. Use the supported rotation workflow if access is lost:
 
 ```bash
 npm start -- --rotate-token
@@ -53,8 +45,6 @@ npm run build
 npm run dev:server
 npm run dev:web
 ```
-
----
 
 ## What it does
 
@@ -83,15 +73,9 @@ npm run dev:web
 
 ### Governed MCP providers
 
-AlphaX is designed to place existing security MCP servers behind one authorization and audit boundary.
-Kali MCP and HexStrike AI MCP are provider integrations; they are execution providers, not policy authorities.
-See [Kali + HexStrike MCP](docs/MCP-KALI-HEXSTRIKE.md).
-
----
+AlphaX places existing security MCP servers behind one authorization and audit boundary. Kali MCP and HexStrike AI MCP are execution providers, not policy authorities. See [Kali + HexStrike MCP](docs/MCP-KALI-HEXSTRIKE.md).
 
 ## Security architecture
-
-The security boundary follows this model:
 
 ```text
 Operator
@@ -117,7 +101,7 @@ Important rules:
 - Emergency stop blocks governed execution.
 - Secrets must never be committed to Git.
 
-### Authentication
+## Authentication
 
 - Persistent local users and roles: `admin`, `security-analyst`, `pentester`, `auditor`, `viewer`.
 - Scrypt password hashing with per-user salts.
@@ -126,12 +110,9 @@ Important rules:
 - Login failure tracking and temporary lockout.
 - HttpOnly + SameSite cookie protection and state-changing request origin checks.
 
-### Network exposure
+## Network exposure
 
-The default binding is **127.0.0.1**. Do not expose the dashboard directly to the Internet.
-For remote access, use a properly configured TLS reverse proxy and review the [Security Model](docs/SECURITY.md).
-
----
+The default binding is **127.0.0.1**. Do not expose the dashboard directly to the Internet. For remote access, use a properly configured TLS reverse proxy and review the [Security Model](docs/SECURITY.md).
 
 ## Project layout
 
@@ -141,11 +122,9 @@ server/                 Express + TypeScript control plane
   src/routes/           REST API routes
   src/                  auth, policy, missions, tasks, MCP, audit, intelligence, workers
 web/                    React 18 + Vite + Tailwind dashboard
-docs/                   Architecture, security, MCP, operations, ATT&CK and roadmap
+docs/                   Architecture, implementation, security and operations documentation
 observability/          Prometheus / Grafana / Loki stack
 ```
-
----
 
 ## Configuration
 
@@ -162,13 +141,9 @@ Example:
 PORT=9000 ALPHAX_HOME=/home/me/.alphax-agents-os npm start
 ```
 
----
-
 ## Observability
 
-The server exposes a Prometheus `/metrics` endpoint and structured logs. A single-host Prometheus,
-Loki, Grafana, cAdvisor, Node Exporter, Alertmanager and Pushgateway stack is available under
-[`observability/`](observability/README.md).
+The server exposes a Prometheus `/metrics` endpoint and structured logs. A single-host Prometheus, Loki, Grafana, cAdvisor, Node Exporter, Alertmanager and Pushgateway stack is available under [`observability/`](observability/README.md).
 
 ```bash
 cd observability
@@ -177,13 +152,8 @@ cp .env.example .env
 ./obs.sh up
 ```
 
----
-
 ## Responsible use
 
-AlphaX is intended for systems and assets for which the operator has explicit authorization.
-The control plane is deliberately designed to keep scope, approval, audit and evidence boundaries
-around security tooling. Do not use it to access or test systems without permission.
+AlphaX is intended for systems and assets for which the operator has explicit authorization. The control plane is deliberately designed to keep scope, approval, audit and evidence boundaries around security tooling. Do not use it to access or test systems without permission.
 
-See [SECURITY.md](docs/SECURITY.md) and [OPERATIONS.md](docs/OPERATIONS.md) before enabling additional
-MCP providers or network exposure.
+See [SECURITY.md](docs/SECURITY.md), [THREAT-MODEL.md](docs/THREAT-MODEL.md) and [OPERATIONS.md](docs/OPERATIONS.md) before enabling additional MCP providers or network exposure.
