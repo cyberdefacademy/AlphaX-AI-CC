@@ -12,22 +12,16 @@ export function ensureRoutePermissions(): void {
   const roles = db.prepare("SELECT id,name FROM security_roles WHERE name IN ('security-analyst','pentester','auditor','viewer')").all() as { id: string; name: string }[];
   const permissions = db.prepare('SELECT id,name FROM security_permissions WHERE name IN (?,?,?,?)').all(...permissionNames) as { id: string; name: string }[];
   const grant = db.prepare('INSERT OR IGNORE INTO role_permissions(role_id,permission_id) VALUES(?,?)');
-  for (const role of roles) {
-    for (const permission of permissions) {
-      if (role.name === 'viewer' || permission.name === 'missions.read') grant.run(role.id, permission.id);
-    }
-  }
+  for (const role of roles) for (const permission of permissions) if (role.name === 'viewer' || permission.name === 'missions.read') grant.run(role.id, permission.id);
 }
 
 type Method = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
-
 function permissionFor(req: Request): string | null {
   const path = req.path.replace(/\/+$/, '') || '/';
   const method = req.method as Method;
   if (path === '/health' || path === '/auth/login') return null;
   if (path.startsWith('/auth/')) return null;
   if (path === '/mcp/execute' || /^\/agents\/[^/]+\/command$/.test(path)) return null;
-
   const [area, action] = path.split('/').filter(Boolean);
   const write = method !== 'GET';
   switch (area) {
@@ -35,6 +29,7 @@ function permissionFor(req: Request): string | null {
     case 'security':
     case 'security-platform':
     case 'scope': return write ? 'policy.manage' : 'security.read';
+    case 'safety': return write ? 'policy.manage' : 'security.read';
     case 'mcp': return write ? 'tools.manage' : 'tools.read';
     case 'capabilities': return write ? 'tools.manage' : 'tools.read';
     case 'agents': return 'tools.read';
@@ -63,9 +58,8 @@ export function csrfGuard(req: Request, res: Response, next: NextFunction): void
     const forwardedProto = req.get('x-forwarded-proto');
     const protocol = forwardedProto?.split(',')[0].trim() || req.protocol;
     const expected = `${protocol}://${req.get('host')}`;
-    try {
-      if (new URL(origin).origin !== expected) { res.status(403).json({ error: 'invalid request origin' }); return; }
-    } catch { res.status(403).json({ error: 'invalid request origin' }); return; }
+    try { if (new URL(origin).origin !== expected) { res.status(403).json({ error: 'invalid request origin' }); return; } }
+    catch { res.status(403).json({ error: 'invalid request origin' }); return; }
   }
   next();
 }
@@ -77,15 +71,7 @@ export function authorizeRoute(req: Request, res: Response, next: NextFunction):
   const cookies = parseCookies(req.headers.cookie || '');
   const principal = cookies.session ? getSessionPrincipal(cookies.session) : null;
   if (!principal) { res.status(401).json({ error: 'authenticated session required' }); return; }
-  if (permission === '__route_not_governed__') {
-    audit(principal.actor, 'route.blocked', req.path, 'deny', { method: req.method, reason: 'route_not_governed' });
-    res.status(403).json({ error: 'route is not governed by an explicit security policy' });
-    return;
-  }
-  if (!hasPermission(principal.role, permission)) {
-    audit(principal.actor, 'route.authorization_denied', req.path, 'deny', { method: req.method, permission });
-    res.status(403).json({ error: `permission denied: ${permission}` });
-    return;
-  }
+  if (permission === '__route_not_governed__') { audit(principal.actor, 'route.blocked', req.path, 'deny', { method: req.method, reason: 'route_not_governed' }); res.status(403).json({ error: 'route is not governed by an explicit security policy' }); return; }
+  if (!hasPermission(principal.role, permission)) { audit(principal.actor, 'route.authorization_denied', req.path, 'deny', { method: req.method, permission }); res.status(403).json({ error: `permission denied: ${permission}` }); return; }
   next();
 }
