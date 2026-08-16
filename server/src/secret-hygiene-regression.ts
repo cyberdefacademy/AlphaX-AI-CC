@@ -1,6 +1,7 @@
 import { execFileSync } from "node:child_process";
 
-const tracked = execFileSync("git", ["ls-files", "-z"], { encoding: "utf8" })
+const repoRoot = execFileSync("git", ["rev-parse", "--show-toplevel"], { encoding: "utf8" }).trim();
+const tracked = execFileSync("git", ["-C", repoRoot, "ls-files", "-z"], { encoding: "utf8" })
   .split("\0")
   .filter(Boolean)
   .filter((file) => !file.endsWith("package-lock.json"));
@@ -16,7 +17,10 @@ const patterns: Array<[string, RegExp]> = [
 const findings: string[] = [];
 for (const file of tracked) {
   if (file.startsWith("docs/") || file.startsWith("observability/")) continue;
-  const text = execFileSync("git", ["show", `HEAD:${file}`], { encoding: "utf8", maxBuffer: 2 * 1024 * 1024 });
+  const text = execFileSync("git", ["-C", repoRoot, "show", `HEAD:${file}`], {
+    encoding: "utf8",
+    maxBuffer: 2 * 1024 * 1024,
+  });
   for (const [name, pattern] of patterns) {
     if (pattern.test(text)) findings.push(`${file}: ${name}`);
   }
