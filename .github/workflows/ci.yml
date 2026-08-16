@@ -1,5 +1,6 @@
 name: AlphaX CI
 
+# Release gate: dependency lockfile and security regressions must be green before merge.
 on:
   push:
     branches: [main, feature/ai-security-control-plane]
@@ -37,3 +38,7 @@ jobs:
         run: npm run test:intelligence --workspace server
       - name: Production readiness regression
         run: npm run test:production --workspace server
+      - name: Secret hygiene regression
+        run: npm run test:secrets --workspace server
+      - name: Dependency audit
+        run: npm audit --audit-level=high
