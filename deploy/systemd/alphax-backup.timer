@@ -1,0 +1,11 @@
+[Unit]
+Description=Run AlphaX Agents OS backup daily
+
+[Timer]
+OnCalendar=*-*-* 02:30:00 UTC
+Persistent=true
+RandomizedDelaySec=10m
+Unit=alphax-backup.service
+
+[Install]
+WantedBy=timers.target
