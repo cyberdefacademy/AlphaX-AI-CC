@@ -1,7 +1,8 @@
 import { execFileSync } from "node:child_process";
 
+const runGit = (args: string[]) => execFileSync("git", ["-C", repoRoot, ...args], { encoding: "utf8" });
 const repoRoot = execFileSync("git", ["rev-parse", "--show-toplevel"], { encoding: "utf8" }).trim();
-const tracked = execFileSync("git", ["-C", repoRoot, "ls-files", "-z"], { encoding: "utf8" })
+const tracked = runGit(["ls-files", "-z"])
   .split("\0")
   .filter(Boolean)
   .filter((file) => !file.endsWith("package-lock.json"));
@@ -17,11 +18,17 @@ const patterns: Array<[string, RegExp]> = [
 const findings: string[] = [];
 for (const file of tracked) {
   if (file.startsWith("docs/") || file.startsWith("observability/")) continue;
-  const text = execFileSync("git", ["-C", repoRoot, "show", `HEAD:${file}`], {
-    encoding: "utf8",
-    maxBuffer: 2 * 1024 * 1024,
-  });
+
+  let text: string;
+  try {
+    text = runGit(["show", `HEAD:${file}`]);
+  } catch (error) {
+    console.error(`Unable to inspect tracked file ${file}: ${String(error)}`);
+    process.exit(2);
+  }
+
   for (const [name, pattern] of patterns) {
+    pattern.lastIndex = 0;
     if (pattern.test(text)) findings.push(`${file}: ${name}`);
   }
 }
@@ -32,4 +39,4 @@ if (findings.length) {
   process.exit(1);
 }
 
-console.log(`Secret hygiene passed: scanned ${tracked.length} tracked files.`);
+console.log(`Secret hygiene passed: scanned ${tracked.length} tracked files from repository root ${repoRoot}.`);
