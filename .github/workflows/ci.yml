@@ -27,6 +27,32 @@ jobs:
         run: npm run typecheck
       - name: Build
         run: npm run build
+      - name: Startup smoke test
+        shell: bash
+        run: |
+          set -euo pipefail
+          tmp_home="$(mktemp -d)"
+          log_file="$(mktemp)"
+          ALPHAX_HOME="$tmp_home" HOST=127.0.0.1 PORT=18455 npm start >"$log_file" 2>&1 &
+          pid=$!
+          cleanup() {
+            kill "$pid" 2>/dev/null || true
+            wait "$pid" 2>/dev/null || true
+            rm -rf "$tmp_home" "$log_file"
+          }
+          trap cleanup EXIT
+          for _ in {1..20}; do
+            if grep -q "AlphaX Agents OS is running" "$log_file"; then
+              exit 0
+            fi
+            if ! kill -0 "$pid" 2>/dev/null; then
+              cat "$log_file"
+              exit 1
+            fi
+            sleep 1
+          done
+          cat "$log_file"
+          exit 1
       - name: Security regression
         run: npm run test:security --workspace server
       - name: Safety regression
