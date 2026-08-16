@@ -13,7 +13,8 @@
     "test:safety": "tsx src/safety-regression.ts",
     "test:mcp": "tsx src/mcp-provider-selftest.ts",
     "test:intelligence": "tsx src/intelligence-regression.ts",
-    "test:production": "tsx src/production-readiness-regression.ts"
+    "test:production": "tsx src/production-readiness-regression.ts",
+    "test:secrets": "tsx src/secret-hygiene-regression.ts"
   },
   "dependencies": {
     "express": "^4.19.2",
