@@ -18,6 +18,7 @@ It discovers, registers, monitors, and controls AI agents (OpenClaw, Hermes Agen
 - [Phase 3 MCP Implementation](docs/PHASE-3-MCP.md) — dynamic provider discovery, health, schemas, normalization and safe validation
 - [Phase 4 Intelligence](docs/PHASE-4-INTELLIGENCE.md) — normalization, ATT&CK candidates, evidence, findings, correlation, deduplication and analyst review
 - [Operations Runbook](docs/OPERATIONS.md) — installation, operation and recovery
+- [Phase 7 Production Operations](docs/PHASE-7-PRODUCTION-OPERATIONS.md) — hardened deployment, TLS edge, backups, rollout, rollback and disaster recovery
 - [ATT&CK + Evidence](docs/ATTACK-AUDIT.md) — intelligence, findings and provenance
 - [Roadmap](docs/ROADMAP.md) — implementation phases and definition of done
 
@@ -62,6 +63,7 @@ npm run dev:web
 | Intelligence | Deterministic result normalization, ATT&CK candidate mapping, evidence extraction, finding correlation, deduplication, confidence scoring and analyst review. |
 | Audit | Tamper-evident security audit records and mission timelines. |
 | Observability | Prometheus metrics and optional Grafana/Loki stack. |
+| Production operations | Hardened systemd profile, TLS reverse-proxy example, edge rate limits and scheduled SQLite backups. |
 
 ### Supported agent adapters
 
@@ -114,7 +116,7 @@ Important rules:
 
 ## Network exposure
 
-The default binding is **127.0.0.1**. Do not expose the dashboard directly to the Internet. For remote access, use a properly configured TLS reverse proxy and review the [Security Model](docs/SECURITY.md).
+The default binding is **127.0.0.1**. Do not expose the dashboard directly to the Internet. For remote access, use a properly configured TLS reverse proxy and review the [Security Model](docs/SECURITY.md) and [Phase 7 Production Operations](docs/PHASE-7-PRODUCTION-OPERATIONS.md).
 
 ## Project layout
 
@@ -126,6 +128,7 @@ server/                 Express + TypeScript control plane
 web/                    React 18 + Vite + Tailwind dashboard
 docs/                   Architecture, implementation, security and operations documentation
 observability/          Prometheus / Grafana / Loki stack
+deploy/                 Production systemd and nginx deployment profiles
 ```
 
 ## Configuration
@@ -147,7 +150,7 @@ Example:
 PORT=9000 ALPHAX_HOME=/home/me/.alphax-agents-os npm start
 ```
 
-See `docs/PHASE-3-MCP.md` for provider authentication and remote endpoint configuration.
+See `docs/PHASE-3-MCP.md` for provider authentication and remote endpoint configuration and `docs/PHASE-7-PRODUCTION-OPERATIONS.md` for production deployment.
 
 ## Observability
 
@@ -164,4 +167,4 @@ cp .env.example .env
 
 AlphaX is intended for systems and assets for which the operator has explicit authorization. The control plane is deliberately designed to keep scope, approval, audit and evidence boundaries around security tooling. Do not use it to access or test systems without permission.
 
-See [SECURITY.md](docs/SECURITY.md), [THREAT-MODEL.md](docs/THREAT-MODEL.md) and [OPERATIONS.md](docs/OPERATIONS.md) before enabling additional MCP providers or network exposure.
+See [SECURITY.md](docs/SECURITY.md), [THREAT-MODEL.md](docs/THREAT-MODEL.md), [OPERATIONS.md](docs/OPERATIONS.md) and [PHASE-7-PRODUCTION-OPERATIONS.md](docs/PHASE-7-PRODUCTION-OPERATIONS.md) before enabling additional MCP providers or network exposure.
