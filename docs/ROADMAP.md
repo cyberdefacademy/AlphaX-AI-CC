@@ -61,7 +61,7 @@ Status: **complete / merged to main**
 
 ## Phase 5 — Operator experience
 
-Status: **in progress**
+Status: **complete / baseline merged to main**
 
 - [x] operator console shell
 - [x] live control-plane/provider health polling
@@ -69,25 +69,60 @@ Status: **in progress**
 - [x] finding explorer
 - [x] ATT&CK coverage summary
 - [x] navigation to mission timeline, audit activity and security center
-- [ ] richer live mission timeline with WebSocket event rendering
-- [ ] task queue controls and explicit cancellation UX
-- [ ] evidence/custody detail viewer
-- [ ] ATT&CK tactic/technique drill-down
-- [ ] audit integrity verification view
-- [ ] emergency-stop API and confirmation workflow
+- [x] richer live mission timeline with WebSocket event rendering
+- [x] task queue controls and explicit cancellation UX
+- [x] evidence/custody detail viewer
+- [x] ATT&CK tactic/technique drill-down
+- [x] audit integrity verification view
+- [x] emergency-stop API and confirmation workflow
 
 ## Phase 6 — Production hardening
 
-Status: **planned**
+Status: **complete / merged to main**
 
-- TLS deployment profile
-- secret management integration
-- backup/restore verification
-- rate limiting
-- resource quotas
-- structured security alerts
-- disaster recovery runbook
-- security test suite expansion
+- [x] committed-secret hygiene regression
+- [x] high-severity npm dependency audit gate
+- [x] repeatable local SQLite backup tooling
+- [x] backup checksum and SQLite integrity verification
+- [x] CI integration for security gates
+
+## Phase 7 — Production deployment & operations
+
+Status: **in progress**
+
+### Slice 1 — deployment foundation
+
+- [x] hardened systemd service profile
+- [x] dedicated unprivileged service account convention
+- [x] loopback-only application deployment profile
+- [x] nginx TLS reverse-proxy profile
+- [x] WebSocket proxying profile
+- [x] edge API/auth rate-limit profile
+- [x] scheduled SQLite backup service/timer
+- [x] production rollout and rollback runbook
+- [x] disaster-recovery restore procedure definition
+
+### Slice 2 — runtime resilience
+
+- [ ] application-level distributed rate limiting where multi-instance deployment requires it
+- [ ] worker/task resource quotas
+- [ ] bounded request concurrency and queue backpressure
+- [ ] graceful readiness/draining state for rolling restarts
+
+### Slice 3 — security operations
+
+- [ ] structured security alert events and severity taxonomy
+- [ ] alert routing/runbook integration
+- [ ] automated audit-integrity monitoring
+- [ ] credential rotation/expiry checks
+
+### Slice 4 — disaster recovery and release engineering
+
+- [ ] automated restore verification in an isolated environment
+- [ ] release artifact provenance and SBOM publication
+- [ ] tested RPO/RTO targets
+- [ ] production smoke-test workflow
+- [ ] documented release promotion gates
 
 ## Definition of done for an execution adapter
 

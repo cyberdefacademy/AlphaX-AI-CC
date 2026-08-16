@@ -1,0 +1,38 @@
+[Unit]
+Description=AlphaX Agents OS control plane
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=alphax
+Group=alphax
+WorkingDirectory=/opt/alphax-agents-os/current
+EnvironmentFile=-/etc/alphax-agents-os/production.env
+Environment=NODE_ENV=production
+Environment=HOST=127.0.0.1
+Environment=PORT=8455
+Environment=ALPHAX_HOME=/var/lib/alphax-agents-os
+ExecStart=/usr/bin/node /opt/alphax-agents-os/current/server/dist/index.js
+Restart=on-failure
+RestartSec=5s
+TimeoutStopSec=15s
+
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+ReadWritePaths=/var/lib/alphax-agents-os
+
+# Keep credentials out of the unit file. Use /etc/alphax-agents-os/production.env
+# with mode 0600 and a dedicated service account.
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target
