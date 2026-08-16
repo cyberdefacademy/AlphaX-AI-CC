@@ -1,5 +1,8 @@
 import { execFileSync } from "node:child_process";
 
+const repoRoot = execFileSync("git", ["rev-parse", "--show-toplevel"], { encoding: "utf8" }).trim();
+process.chdir(repoRoot);
+
 const tracked = execFileSync("git", ["ls-files", "-z"], { encoding: "utf8" })
   .split("\0")
   .filter(Boolean)
