@@ -20,7 +20,8 @@ jobs:
         with:
           node-version: 22.13.0
           cache: npm
-      - run: npm install --package-lock-only --ignore-scripts
+      - name: Re-resolve overridden dependency
+        run: npm update esbuild --package-lock-only --ignore-scripts
       - name: Commit lockfile
         run: |
           if git diff --quiet -- package-lock.json; then exit 0; fi
